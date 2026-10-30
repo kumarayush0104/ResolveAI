@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./resolveai.db
+      - PAYPAL_ENV=sandbox
+      - PAYPAL_CLIENT_ID=${PAYPAL_CLIENT_ID}
+      - PAYPAL_CLIENT_SECRET=${PAYPAL_CLIENT_SECRET}
+      - PAYPAL_WEBHOOK_ID=${PAYPAL_WEBHOOK_ID}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-key-32-chars-minimum}
+      - ENABLE_LAB=true
+    volumes:
+      - ./backend:/app/backend
+      - ./resolveai.db:/app/resolveai.db
+    restart: unless-stopped
+
+  # Optional Postgres service for production scaling
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: resolveai
+      POSTGRES_PASSWORD: resolveaipassword
+      POSTGRES_DB: resolveai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    profiles:
+      - postgres
+
+volumes:
+  postgres_data:

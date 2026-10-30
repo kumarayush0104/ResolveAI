@@ -1,0 +1,12 @@
+from enum import Enum
+
+
+class PaymentState(str, Enum):
+    CREATED = "CREATED"
+    PENDING = "PENDING"
+    UNKNOWN = "UNKNOWN"
+    COMPLETED = "COMPLETED"
+    DENIED = "DENIED"
+    RETRY_ALLOWED = "RETRY_ALLOWED"
+    REFUND_PENDING = "REFUND_PENDING"
+    REFUNDED = "REFUNDED"
