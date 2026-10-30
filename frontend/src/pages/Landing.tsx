@@ -185,51 +185,26 @@ export function Landing() {
         </div>
 
         <div className="relative max-w-5xl mx-auto text-center space-y-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-xs font-semibold text-pp-gold tracking-wide"
-          >
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-xs font-semibold text-pp-gold tracking-wide">
             <Shield size={14} />
             <span>Autonomous Payment Resolution & Recovery Engine</span>
-          </motion.div>
+          </div>
 
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white max-w-3xl mx-auto leading-tight"
-          >
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white max-w-3xl mx-auto leading-tight">
             Payments should never leave you guessing.
-          </motion.h1>
+          </h1>
 
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-lg text-gray-300 max-w-2xl mx-auto leading-relaxed"
-          >
+          <p className="text-lg text-gray-300 max-w-2xl mx-auto leading-relaxed">
             ResolveAI eliminates stuck payments, prevents accidental double charges, and pairs authoritative PayPal evidence with an AI Investigator backed by a fail-closed safety engine.
-          </motion.p>
+          </p>
 
           {/* Interactive animated hero diagram */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.3 }}
-            className="pt-4"
-          >
+          <div className="pt-4">
             <HeroScene />
-          </motion.div>
+          </div>
 
           {/* Call to Action buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="flex flex-wrap items-center justify-center gap-4 pt-6"
-          >
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-6">
             <PillButton
               variant="gold"
               onClick={() => nav('/checkout')}
@@ -245,7 +220,7 @@ export function Landing() {
             >
               Open Merchant Console
             </PillButton>
-          </motion.div>
+          </div>
         </div>
       </section>
 
@@ -262,14 +237,9 @@ export function Landing() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {scenarios.map((sc, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.15 }}
-            >
+            <div key={i}>
               <Card className="h-full flex flex-col justify-between hover:shadow-lg transition-all duration-300 border border-line">
+
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <div className="p-3 bg-surface rounded-xl">
@@ -298,7 +268,7 @@ export function Landing() {
                   </button>
                 </div>
               </Card>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>

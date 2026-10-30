@@ -10,60 +10,21 @@ import { CasePage } from './pages/CasePage'
 import { Console } from './pages/Console'
 
 function PageWrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.2 }}
-    >
-      {children}
-    </motion.div>
-  )
+  return <div className="w-full">{children}</div>
 }
 
 function AnimatedRoutes() {
-  const location = useLocation()
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        <Route
-          path="/"
-          element={
-            <PageWrapper>
-              <Landing />
-            </PageWrapper>
-          }
-        />
-        <Route
-          path="/checkout"
-          element={
-            <PageWrapper>
-              <Checkout />
-            </PageWrapper>
-          }
-        />
-        <Route
-          path="/cases/:id"
-          element={
-            <PageWrapper>
-              <CasePage />
-            </PageWrapper>
-          }
-        />
-        <Route
-          path="/console"
-          element={
-            <PageWrapper>
-              <Console />
-            </PageWrapper>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AnimatePresence>
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/checkout" element={<Checkout />} />
+      <Route path="/cases/:id" element={<CasePage />} />
+      <Route path="/console" element={<Console />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   )
 }
+
 
 export default function App() {
   return (
