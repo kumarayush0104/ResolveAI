@@ -2,7 +2,7 @@
 
 > Auto-updated after each major task. If resuming, read this file first, then check git log.
 
-## Status: 🚧 IN PROGRESS — Step 1 complete, moving to Step 2
+## Status: 🚧 IN PROGRESS — Step 2 complete, moving to Step 3
 
 ---
 
@@ -35,15 +35,15 @@
 - [x] 1.X Git commit "step 1: foundation, PayPal adapter, policy engine"
 
 ### STEP 2 — AI Investigator + Frontend
-- [ ] 2.1 Agent package (tools, schemas, Gemini adapter, SSE streaming, offline fallback)
-- [ ] 2.2 Frontend scaffold (Tailwind tokens, components)
-- [ ] 2.3 All 5 screens + animations (§4 visuals)
-- [ ] 2.4 PayPal JS SDK Smart Buttons
-- [ ] 2.5 Merchant Console with AG Grid
-- [ ] 2.6 SSE hook (useCaseStream)
-- [ ] 2.7 Frontend build config
-- [ ] 2.X Acceptance checks pass
-- [ ] 2.X Git commit "step 2: AI investigator, full frontend"
+- [x] 2.1 Agent package (tools, schemas, Gemini adapter, SSE streaming, offline fallback)
+- [x] 2.2 Frontend scaffold (Tailwind tokens, components)
+- [x] 2.3 All 5 screens + animations (§4 visuals)
+- [x] 2.4 PayPal JS SDK Smart Buttons
+- [x] 2.5 Merchant Console with AG Grid
+- [x] 2.6 SSE hook (useCaseStream)
+- [x] 2.7 Frontend build config
+- [x] 2.X Acceptance checks pass
+- [x] 2.X Step 2 code complete
 
 ### STEP 3 — Fault Lab, Polish, Docs, Deployment
 - [ ] 3.1 Fault-Injection Lab (8 actions)
@@ -66,3 +66,4 @@
 | 2026-10-30 16:15 | Completed backend scaffold, DB models, PayPal adapter, Policy Engine (R01-R09). |
 | 2026-10-30 16:18 | All 30 test cases executed (29 passed, 1 skipped live). Acceptance checks passed. |
 | 2026-10-30 16:21 | Verified uvicorn server startup and healthz/config endpoints. Step 1 complete. |
+| 2026-10-30 17:05 | Step 2 completed: AI investigator SSE streaming tool-call loop, complete React/TS frontend (5 screens, 11 animations, StateMachineViz, EvidenceTimeline, Smart Buttons, Console with AG Grid, LabDrawer). |

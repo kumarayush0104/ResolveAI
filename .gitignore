@@ -45,7 +45,8 @@ dist/
 .next/
 out/
 
-# IDE & OS
+# User backup notes
+work done till now/
 .vscode/
 .idea/
 *.swp

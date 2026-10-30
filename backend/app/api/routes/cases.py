@@ -1,7 +1,10 @@
 import uuid
+import json
+import hashlib
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -15,6 +18,8 @@ from backend.app.paypal.orders import get_order, get_capture, refund_capture
 from backend.app.paypal.client import ProviderSnapshot
 from backend.app.services.investigation import run_case_investigation
 from backend.app.agent.prompts import wrap_untrusted_text
+from backend.app.agent.investigator import stream_investigation
+from backend.app.agent.schemas import AgentInvestigationResult
 from backend.app.services.stream_bus import event_bus
 
 router = APIRouter(prefix="/cases", tags=["cases"])
@@ -219,7 +224,7 @@ async def trigger_investigation(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
-    """Trigger AI investigation with policy guardrails."""
+    """Trigger AI investigation with SSE streaming tool-call loop and policy guardrails."""
     stmt = (
         select(Case)
         .options(
@@ -236,8 +241,120 @@ async def trigger_investigation(
 
     require_case_access(case, current_user)
 
-    result_data = await run_case_investigation(case, session)
-    return result_data
+    order = case.order
+    att_res = await session.execute(
+        select(PaymentAttempt).where(PaymentAttempt.order_id == order.id)
+    )
+    attempts = list(att_res.scalars().all())
+
+    # Extract user messages
+    messages = [
+        e.description for e in case.events if e.source == "USER" and e.event_type == "CASE_MESSAGE"
+    ]
+
+    # Authoritative live PayPal snapshot
+    try:
+        capture_id = next((a.paypal_capture_id for a in attempts if a.paypal_capture_id), None)
+        if capture_id:
+            snapshot = await get_capture(capture_id)
+        else:
+            snapshot = await get_order(order.paypal_order_id)
+    except Exception:
+        snapshot = ProviderSnapshot(
+            order_status="UNKNOWN",
+            capture_status="UNKNOWN",
+            order_id=order.paypal_order_id,
+            source="api",
+            raw_ref="Snapshot unavailable during investigation",
+        )
+
+    async def generate_sse():
+        final_result_data = None
+        async for event in stream_investigation(
+            order_id=order.paypal_order_id,
+            case_id=case.id,
+            snapshot=snapshot,
+            attempts=attempts,
+            events=case.events,
+            messages=messages,
+            session=session,
+        ):
+            if event.get("type") == "final":
+                final_result_data = event.get("result")
+            yield f"data: {json.dumps(event)}\n\n"
+
+        # On completion, persist AgentRun and update case status via policy engine
+        if final_result_data:
+            try:
+                result_obj = AgentInvestigationResult(**final_result_data)
+                ai_proposal = {
+                    "recommended_action": result_obj.recommended_action,
+                    "classification": result_obj.classification,
+                }
+                policy_decision = evaluate(
+                    snapshot=snapshot,
+                    attempts=attempts,
+                    events=case.events,
+                    ai_proposal=ai_proposal,
+                )
+                ai_overridden = any(
+                    b.get("rule_id") == "R08_AI_IS_ADVISORY" for b in policy_decision.blocked_actions
+                )
+                hash_input = f"{order.id}:{snapshot.capture_status if snapshot else 'UNKNOWN'}:{len(case.events)}"
+                input_hash = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()[:16]
+
+                agent_run = AgentRun(
+                    case_id=case.id,
+                    input_hash=input_hash,
+                    classification=result_obj.classification,
+                    summary=result_obj.summary,
+                    buyer_message=result_obj.buyer_message,
+                    seller_message=result_obj.seller_message,
+                    evidence_refs=result_obj.evidence_refs,
+                    unknowns=result_obj.unknowns,
+                    recommended_action=result_obj.recommended_action,
+                    confidence=result_obj.confidence,
+                    raw_output=result_obj.model_dump_json(),
+                    ai_overridden=ai_overridden,
+                )
+                session.add(agent_run)
+
+                case_ev = CaseEvent(
+                    case_id=case.id,
+                    source="AI",
+                    event_type="AI_INVESTIGATION_COMPLETED",
+                    description=f"Investigation completed. Recommended: {result_obj.recommended_action}. AI overridden: {ai_overridden}",
+                    is_simulated=getattr(snapshot, "is_simulated", False),
+                )
+                session.add(case_ev)
+
+                case.current_policy_state = policy_decision.state.value
+                case.permitted_actions = policy_decision.permitted_actions
+                case.status = policy_decision.state.value
+
+                await session.commit()
+
+                await event_bus.broadcast(case.id, {
+                    "type": "investigation_completed",
+                    "case_id": case.id,
+                    "state": case.current_policy_state,
+                    "permitted_actions": case.permitted_actions,
+                    "ai_overridden": ai_overridden,
+                    "summary": agent_run.summary,
+                })
+            except Exception as e:
+                # Log error and continue
+                pass
+
+    return StreamingResponse(
+        generate_sse(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/{case_id}/messages")
