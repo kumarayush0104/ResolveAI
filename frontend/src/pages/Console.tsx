@@ -303,17 +303,28 @@ export function Console() {
           <h3 className="font-bold text-pp-blue-dark text-base">All Dispute & Reconciliation Cases</h3>
           <span className="text-xs text-ink-soft">Click any row to open full investigation</span>
         </div>
-        <div className="ag-theme-alpine" style={{ height: 380, width: '100%' }}>
-          <AgGridReact
-            rowData={defaultCases}
-            columnDefs={colDefs}
-            onRowClicked={(r) => nav(`/cases/${r.data.id}`)}
-            pagination={true}
-            paginationPageSize={10}
-            animateRows={true}
-            rowSelection="single"
-          />
-        </div>
+        {cases.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <svg width="64" height="64" viewBox="0 0 64 64" className="text-line mb-4">
+              <circle cx="28" cy="28" r="18" fill="none" stroke="currentColor" strokeWidth="3"/>
+              <line x1="41" y1="41" x2="56" y2="56" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+            </svg>
+            <p className="text-ink-soft font-medium">No cases yet.</p>
+            <p className="text-sm text-ink-soft mt-1">Start a checkout to create your first case.</p>
+          </div>
+        ) : (
+          <div className="ag-theme-alpine" style={{ height: 380, width: '100%' }}>
+            <AgGridReact
+              rowData={cases}
+              columnDefs={colDefs}
+              onRowClicked={(r) => nav(`/cases/${r.data.id}`)}
+              pagination={true}
+              paginationPageSize={10}
+              animateRows={true}
+              rowSelection="single"
+            />
+          </div>
+        )}
       </Card>
     </div>
   )

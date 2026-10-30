@@ -50,6 +50,7 @@ export function CasePage() {
   const { addToast } = useToast()
 
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [caseData, setCaseData] = useState<any>(null)
   const [newMessage, setNewMessage] = useState('')
   const [sendingMessage, setSendingMessage] = useState(false)
@@ -72,10 +73,12 @@ export function CasePage() {
   // Load initial case data
   const loadCase = useCallback(async () => {
     if (!caseId) return
+    setError(null)
     try {
       const data = await api.getCase(caseId)
       setCaseData(data)
     } catch (err: any) {
+      setError(err.message || 'Error loading case')
       addToast(`Error loading case: ${err.message}`, 'warning')
     } finally {
       setLoading(false)
@@ -88,15 +91,15 @@ export function CasePage() {
 
   // Fire confetti on COMPLETED (if not reduced motion)
   const triggerConfetti = useCallback(() => {
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (prefersReduced) return
-
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#0070E0', '#FFC439'],
-    })
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (!prefersReducedMotion) {
+      confetti({
+        particleCount: 80,
+        spread: 60,
+        origin: { y: 0.6 },
+        colors: ['#0070E0', '#FFC439'],
+      })
+    }
   }, [])
 
   // Handle SSE live stream events
@@ -227,10 +230,10 @@ export function CasePage() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto px-6 py-10 space-y-6">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         <Skeleton className="h-10 w-1/3" />
         <Skeleton className="h-64 w-full" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Skeleton className="h-80 w-full" />
           <Skeleton className="h-80 w-full" />
         </div>
@@ -238,17 +241,30 @@ export function CasePage() {
     )
   }
 
-  if (!caseData) {
+  if (error || !caseData) {
     return (
       <div className="max-w-md mx-auto mt-20 text-center space-y-4 px-4">
         <AlertTriangle size={36} className="text-warning mx-auto" />
-        <h2 className="text-xl font-bold text-pp-blue-dark">Case Not Found</h2>
+        <h2 className="text-xl font-bold text-pp-blue-dark">{error ? 'Failed to Load Case' : 'Case Not Found'}</h2>
         <p className="text-sm text-ink-soft">
-          We couldn't locate the dispute or investigation case you requested.
+          {error || "We couldn't locate the dispute or investigation case you requested."}
         </p>
-        <PillButton variant="blue" onClick={() => nav('/')}>
-          Back to Home
-        </PillButton>
+        <div className="flex items-center justify-center gap-3">
+          <PillButton
+            variant="outline"
+            onClick={() => {
+              setLoading(true)
+              setError(null)
+              loadCase()
+            }}
+          >
+            <RotateCcw size={14} />
+            <span>Retry</span>
+          </PillButton>
+          <PillButton variant="blue" onClick={() => nav('/')}>
+            Back to Home
+          </PillButton>
+        </div>
       </div>
     )
   }
@@ -261,16 +277,16 @@ export function CasePage() {
     <div className="min-h-screen bg-surface pb-24">
       {/* Simulation Banner if simulated events exist */}
       {isSimulated && (
-        <div className="bg-white border-b border-line px-6 py-2.5">
-          <div className="max-w-6xl mx-auto">
+        <div className="bg-white border-b border-line px-4 sm:px-6 lg:px-8 py-2.5">
+          <div className="max-w-5xl mx-auto">
             <SimulationBanner message="SIMULATION — This case contains simulated events injected via the Fault-Injection Lab." />
           </div>
         </div>
       )}
 
       {/* Header Info Bar */}
-      <section className="bg-white border-b border-line px-6 py-6 shadow-sm">
-        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <section className="bg-white border-b border-line px-4 sm:px-6 lg:px-8 py-6 shadow-sm">
+        <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-pp-blue-dark">
@@ -310,7 +326,7 @@ export function CasePage() {
       </section>
 
       {/* Main Workspace Grid */}
-      <main className="max-w-6xl mx-auto px-6 py-8 space-y-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* 1. State Machine Visual Diagram */}
         <Card className="border border-line shadow-card overflow-hidden">
           <div className="flex items-center justify-between mb-2">

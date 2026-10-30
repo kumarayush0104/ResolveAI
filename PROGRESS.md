@@ -2,7 +2,7 @@
 
 > Auto-updated after each major task. If resuming, read this file first, then check git log.
 
-## Status: 🚧 IN PROGRESS — Step 2 complete, moving to Step 3
+## Status: ✅ COMPLETE — Steps 1, 2, and 3 All Complete & Verified
 
 ---
 
@@ -43,17 +43,17 @@
 - [x] 2.6 SSE hook (useCaseStream)
 - [x] 2.7 Frontend build config
 - [x] 2.X Acceptance checks pass
-- [x] 2.X Step 2 code complete
+- [x] 2.X Git commit "step 2: AI investigator streaming, full frontend (5 screens, all animations)"
 
 ### STEP 3 — Fault Lab, Polish, Docs, Deployment
-- [ ] 3.1 Fault-Injection Lab (8 actions)
-- [ ] 3.2 Polish pass (a11y, reduced motion, mobile)
-- [ ] 3.3 Scenario tests
-- [ ] 3.4 Docs (README, architecture, demo-script, etc.)
-- [ ] 3.5 Deployment (render.yaml, healthz)
-- [ ] 3.6 5x demo scenario runs
-- [ ] 3.X Acceptance checks pass
-- [ ] 3.X Git commit "step 3: lab, polish, docs, deployment"
+- [x] 3.1 Fault-Injection Lab (8 actions + 3 composite demo scenario one-click scripts)
+- [x] 3.2 Polish pass (a11y, prefers-reduced-motion, mobile responsive, focus rings, empty states, page transitions)
+- [x] 3.3 Scenario tests (31 passed, 1 skipped)
+- [x] 3.4 Docs (README.md, architecture.md, state-machine.md, threat-model.md, test-scenarios.md, demo-script.md, Postman collection)
+- [x] 3.5 Deployment (render.yaml, healthz, frontend static serving)
+- [x] 3.6 5x demo scenario runs (measured-results.md recorded with real latencies)
+- [x] 3.X Acceptance checks pass
+- [x] 3.X Git commit "step 3: lab, polish, docs, deployment, measured results"
 
 ---
 
@@ -67,3 +67,6 @@
 | 2026-10-30 16:18 | All 30 test cases executed (29 passed, 1 skipped live). Acceptance checks passed. |
 | 2026-10-30 16:21 | Verified uvicorn server startup and healthz/config endpoints. Step 1 complete. |
 | 2026-10-30 17:05 | Step 2 completed: AI investigator SSE streaming tool-call loop, complete React/TS frontend (5 screens, 11 animations, StateMachineViz, EvidenceTimeline, Smart Buttons, Console with AG Grid, LabDrawer). |
+| 2026-10-30 17:19 | End-to-end integration verified. Step 2 committed. |
+| 2026-10-30 17:46 | Step 3 completed: 3 composite demo scenario endpoints, a11y & reduced-motion polish, 31 tests passing, complete docs suite (architecture with Mermaid, state-machine, threat-model, demo-script, Postman collection), render.yaml, and 5x scenario benchmark runs recorded in measured-results.md. |
+

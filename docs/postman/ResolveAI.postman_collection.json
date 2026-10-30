@@ -1,0 +1,363 @@
+{
+  "info": {
+    "_postman_id": "96537f29-807d-4ff5-9172-272c0929fa40",
+    "name": "ResolveAI API Collection",
+    "description": "Comprehensive API collection for the ResolveAI autonomous dispute, recovery, and stuck-payment engine on top of PayPal.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "SAMPLE-ORDER-ID",
+      "type": "string"
+    },
+    {
+      "key": "caseId",
+      "value": "SAMPLE-CASE-ID",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Config",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/healthz",
+              "host": ["{{baseUrl}}"],
+              "path": ["healthz"]
+            }
+          }
+        },
+        {
+          "name": "Get Public Config",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/config/public",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "config", "public"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Demo Login (Buyer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.access_token) {",
+                  "    pm.collectionVariables.set('token', jsonData.access_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"buyer\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/demo-login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "demo-login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Create Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.order_id) {",
+                  "    pm.collectionVariables.set('orderId', jsonData.order_id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 25.00,\n  \"currency\": \"USD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            }
+          }
+        },
+        {
+          "name": "Get Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "{{orderId}}"]
+            }
+          }
+        },
+        {
+          "name": "Capture Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{orderId}}/capture",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "{{orderId}}", "capture"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cases & Investigation",
+      "item": [
+        {
+          "name": "Create Case",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.id) {",
+                  "    pm.collectionVariables.set('caseId', jsonData.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"{{orderId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cases",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cases"]
+            }
+          }
+        },
+        {
+          "name": "Get Case",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cases/{{caseId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cases", "{{caseId}}"]
+            }
+          }
+        },
+        {
+          "name": "Investigate Case",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/cases/{{caseId}}/investigate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cases", "{{caseId}}", "investigate"]
+            }
+          }
+        },
+        {
+          "name": "Add Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"I was charged but haven't received an email confirmation.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/cases/{{caseId}}/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "cases", "{{caseId}}", "messages"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Merchant Console",
+      "item": [
+        {
+          "name": "Get Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/merchant/metrics",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "merchant", "metrics"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Fault Lab & Scenarios",
+      "item": [
+        {
+          "name": "Lab: Inject Pending",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"case_id\": \"{{caseId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/lab/inject-pending",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "lab", "inject-pending"]
+            }
+          }
+        },
+        {
+          "name": "Lab: Run Scenario 1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"order_id\": \"{{orderId}}\",\n  \"case_id\": \"{{caseId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/lab/run-scenario-1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "lab", "run-scenario-1"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

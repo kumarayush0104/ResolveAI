@@ -1,8 +1,15 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
-import { FlaskConical, X, Zap } from 'lucide-react'
+import { FlaskConical, X, Zap, Play, Sparkles } from 'lucide-react'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
+
+// "Run Demo Scenario" section
+const DEMO_SCENARIOS = [
+  { id: 'run-scenario-1', label: 'Scenario 1: Lost Success Response', desc: '3-step: UNKNOWN → reconciler → COMPLETED via SSE', color: 'warning' },
+  { id: 'run-scenario-2', label: 'Scenario 2: Definitive Failure + Safe Retry', desc: 'DENIED → AI diagnoses → R04 gates retry', color: 'danger' },
+  { id: 'run-scenario-3', label: 'Scenario 3: Delayed Reconciliation', desc: 'PENDING → delayed COMPLETED webhook → live SSE toast', color: 'unknown' },
+]
 
 // 8 lab actions
 const LAB_ACTIONS = [
@@ -109,34 +116,72 @@ export function LabDrawer({
         All events pass through the policy engine flagged <code className="text-pp-gold">is_simulated=true</code>.
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {LAB_ACTIONS.map((action) => (
-          <motion.button
-            key={action.id}
-            whileTap={{ x: [0, -4, 4, -4, 4, 0], transition: { duration: 0.3 } }}
-            onClick={() => run(action.id)}
-            disabled={!!running}
-            className={`w-full text-left p-4 rounded-xl border transition-all ${
-              action.danger
-                ? 'border-danger/40 bg-danger/10 hover:bg-danger/20'
-                : 'border-pp-gold/20 bg-white/5 hover:bg-white/10'
-            } disabled:opacity-50`}
-          >
-            <div className="flex items-center gap-2">
-              <Zap
-                size={14}
-                className={action.danger ? 'text-danger' : 'text-pp-gold'}
-              />
-              <span className="font-semibold text-sm">{action.label}</span>
-              {running === action.id && (
-                <span className="ml-auto w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
-              )}
-            </div>
-            <p className="text-xs text-gray-400 mt-1 leading-relaxed">
-              {action.desc}
-            </p>
-          </motion.button>
-        ))}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Prominent Demo Scenarios Section */}
+        <div>
+          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-pp-gold mb-2.5">
+            <Sparkles size={14} className="text-pp-gold" />
+            <span>Run Demo Scenario (One-Click)</span>
+          </div>
+          <div className="space-y-2">
+            {DEMO_SCENARIOS.map((sc) => (
+              <motion.button
+                key={sc.id}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => run(sc.id)}
+                disabled={!!running}
+                className="w-full text-left p-3.5 rounded-xl border border-pp-gold/40 bg-gradient-to-r from-pp-gold/15 to-transparent hover:from-pp-gold/25 transition-all disabled:opacity-50"
+              >
+                <div className="flex items-center gap-2">
+                  <Play size={13} className="text-pp-gold fill-pp-gold" />
+                  <span className="font-semibold text-xs text-white">{sc.label}</span>
+                  {running === sc.id && (
+                    <span className="ml-auto w-3 h-3 border border-pp-gold border-t-transparent rounded-full animate-spin" />
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-300 mt-1 leading-snug">
+                  {sc.desc}
+                </p>
+              </motion.button>
+            ))}
+          </div>
+        </div>
+
+        {/* Individual Fault Actions Section */}
+        <div className="border-t border-white/10 pt-3">
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+            Individual Fault Injections
+          </div>
+          <div className="space-y-2.5">
+            {LAB_ACTIONS.map((action) => (
+              <motion.button
+                key={action.id}
+                whileTap={{ x: [0, -4, 4, -4, 4, 0], transition: { duration: 0.3 } }}
+                onClick={() => run(action.id)}
+                disabled={!!running}
+                className={`w-full text-left p-3.5 rounded-xl border transition-all ${
+                  action.danger
+                    ? 'border-danger/40 bg-danger/10 hover:bg-danger/20'
+                    : 'border-pp-gold/20 bg-white/5 hover:bg-white/10'
+                } disabled:opacity-50`}
+              >
+                <div className="flex items-center gap-2">
+                  <Zap
+                    size={14}
+                    className={action.danger ? 'text-danger' : 'text-pp-gold'}
+                  />
+                  <span className="font-semibold text-xs">{action.label}</span>
+                  {running === action.id && (
+                    <span className="ml-auto w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
+                  {action.desc}
+                </p>
+              </motion.button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="p-4 border-t border-white/10 text-center text-[11px] text-gray-400">

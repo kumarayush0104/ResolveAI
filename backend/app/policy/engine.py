@@ -278,13 +278,17 @@ def _apply_ai_guard(decision: PolicyDecision, ai_proposal: Optional[Dict[str, An
     if not ai_proposal:
         return decision
 
-    rec_action = ai_proposal.get("recommended_action")
+    if isinstance(ai_proposal, dict):
+        rec_action = ai_proposal.get("recommended_action")
+    else:
+        rec_action = getattr(ai_proposal, "recommended_action", None)
+
     if not rec_action:
         return decision
 
     # Map AI actions to policy actions
     # e.g., AI recommended 'ALLOW_RETRY' or 'RETRY'
-    is_blocked = any(b["action"] == rec_action for b in decision.blocked_actions)
+    is_blocked = any(b["action"] == rec_action or (rec_action in ("RETRY", "ALLOW_RETRY") and b["action"] in ("RETRY", "ALLOW_RETRY")) for b in decision.blocked_actions)
     if is_blocked or (rec_action not in decision.permitted_actions and rec_action != "ESCALATE" and rec_action != "RECONCILE"):
         # Policy wins! Override AI recommendation
         decision.blocked_actions.append({

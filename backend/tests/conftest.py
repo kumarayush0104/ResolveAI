@@ -100,3 +100,15 @@ def auth_tokens():
         "seller": {"Authorization": f"Bearer {seller_token}"},
         "admin": {"Authorization": f"Bearer {admin_token}"},
     }
+
+
+@pytest_asyncio.fixture
+async def client(async_client):
+    """Alias for async_client."""
+    return async_client
+
+
+@pytest.fixture
+def buyer_headers(auth_tokens):
+    """Direct fixture for buyer headers."""
+    return auth_tokens["buyer"]

@@ -14,6 +14,9 @@ from backend.app.services.lab import (
     simulate_lose_success_response,
     simulate_inject_failure,
     simulate_inject_pending,
+    run_demo_scenario_1_lost_success,
+    run_demo_scenario_2_definitive_failure,
+    run_demo_scenario_3_delayed_reconciliation,
 )
 from backend.app.services.stream_bus import event_bus
 
@@ -30,6 +33,11 @@ def check_lab_enabled():
 
 class CaseActionRequest(BaseModel):
     case_id: str
+
+
+class ScenarioRequest(BaseModel):
+    case_id: str
+    order_id: Optional[str] = None
 
 
 class SimulateWebhookRequest(BaseModel):
@@ -336,3 +344,42 @@ async def lab_prompt_injection(
         "status": "injected",
         "is_simulated": True,
     }
+
+
+@router.post("/run-scenario-1")
+async def lab_run_scenario_1(
+    payload: ScenarioRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """Scenario 1: Lost Success Response: real capture → UNKNOWN → reconciler recovers to COMPLETED."""
+    check_lab_enabled()
+    try:
+        return await run_demo_scenario_1_lost_success(payload.order_id, payload.case_id, session)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/run-scenario-2")
+async def lab_run_scenario_2(
+    payload: ScenarioRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """Scenario 2: Definitive Failure + Safe Retry: inject DENIED → policy gates retry → admin approves."""
+    check_lab_enabled()
+    try:
+        return await run_demo_scenario_2_definitive_failure(payload.order_id, payload.case_id, session)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/run-scenario-3")
+async def lab_run_scenario_3(
+    payload: ScenarioRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """Scenario 3: Delayed Reconciliation: inject PENDING → wait → deliver COMPLETED webhook → SSE live update."""
+    check_lab_enabled()
+    try:
+        return await run_demo_scenario_3_delayed_reconciliation(payload.order_id, payload.case_id, session)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

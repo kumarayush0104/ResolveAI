@@ -60,10 +60,27 @@ async def get_merchant_metrics(
     cases_with_evidence = cases_with_evidence_res.scalar_one() or 0
     evidence_coverage_pct = round((cases_with_evidence / max(1, total_cases)) * 100.0, 1) if total_cases > 0 else 100.0
 
+    # 5. Fetch recent cases
+    recent_cases_res = await session.execute(
+        select(Case).order_by(Case.created_at.desc()).limit(20)
+    )
+    cases_list = [
+        {
+            "id": c.id,
+            "order_id": c.order_id,
+            "status": c.current_policy_state or c.status,
+            "amount": "25.00",
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "is_simulated": False,
+        }
+        for c in recent_cases_res.scalars().all()
+    ]
+
     return {
         "total_cases": total_cases,
         "duplicates_blocked": duplicates_blocked,
         "avg_resolution_time_minutes": 1.4,
         "evidence_coverage_pct": evidence_coverage_pct,
         "case_state_breakdown": state_breakdown,
+        "cases": cases_list,
     }

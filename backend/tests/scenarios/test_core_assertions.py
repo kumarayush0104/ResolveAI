@@ -179,3 +179,59 @@ def test_unauthorized_access_returns_403_or_404():
 
     # Admin has merchant access
     require_case_access(case_a, admin_user)
+
+
+@pytest.mark.asyncio
+async def test_ai_vs_policy_override(client, buyer_headers):
+    """R08: if AI recommends ALLOW_RETRY but policy says BLOCK_RETRY, policy wins."""
+    from backend.app.policy.engine import evaluate
+    from backend.app.paypal.client import ProviderSnapshot
+    from backend.app.agent.schemas import AgentInvestigationResult
+
+    # COMPLETED capture - policy should block retry (R01)
+    snapshot = ProviderSnapshot(
+        order_status="COMPLETED",
+        capture_status="COMPLETED",
+        order_id="test-order",
+        source="api",
+        raw_ref="test"
+    )
+    ai_proposal = AgentInvestigationResult(
+        classification="COMPLETED",
+        summary="Completed",
+        buyer_message="Done",
+        seller_message="Fulfill",
+        evidence_refs=["snapshot.capture_status"],
+        unknowns=[],
+        recommended_action="ALLOW_RETRY",  # AI WRONGLY suggests retry
+        requires_human_approval=True,
+        confidence=0.5
+    )
+    decision = evaluate(snapshot=snapshot, attempts=[], events=[], ai_proposal=ai_proposal)
+    # Policy must override AI
+    assert "retry" not in [a.lower() for a in decision.permitted_actions], \
+        "Policy must block retry even when AI recommends it (R08)"
+    assert any("R01" in b.get("rule_id","") for b in decision.blocked_actions), \
+        "R01 must fire blocking retry on COMPLETED state"
+
+
+@pytest.mark.asyncio
+async def test_offline_investigator_same_schema(client):
+    """Offline investigator must produce the same schema as online."""
+    from backend.app.agent.offline import offline_investigate
+    from backend.app.paypal.client import ProviderSnapshot
+
+    for cap_status in ["COMPLETED", "PENDING", "DENIED", "UNKNOWN"]:
+        snapshot = ProviderSnapshot(
+            order_status=cap_status,
+            capture_status=cap_status,
+            order_id="test",
+            source="api",
+            raw_ref="test"
+        )
+        result = offline_investigate(snapshot, [], [])
+        # Must have all required fields
+        assert result.classification in ("PENDING","COMPLETED","DEFINITIVE_FAILURE","UNKNOWN","CONFLICT")
+        assert isinstance(result.evidence_refs, list)
+        assert 0.0 <= result.confidence <= 1.0
+        assert result.recommended_action in ("RECONCILE","BLOCK_RETRY","ALLOW_RETRY","ESCALATE")
