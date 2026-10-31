@@ -27,10 +27,16 @@ export default {
       borderRadius: {
         'xl':  '0.75rem',
         '2xl': '1rem',
+        '3xl': '1.5rem',
         'full':'9999px',
       },
       boxShadow: {
-        card: '0 1px 2px rgba(0,28,100,.06), 0 8px 24px rgba(0,28,100,.08)',
+        card:   '0 1px 2px rgba(0,28,100,.06), 0 8px 24px rgba(0,28,100,.08)',
+        mobile: '0 0 60px rgba(0,0,0,0.25)',
+        float:  '0 8px 32px rgba(0,112,224,0.18)',
+      },
+      maxWidth: {
+        mobile: '430px',
       },
     },
   },
