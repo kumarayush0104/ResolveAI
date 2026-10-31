@@ -1,18 +1,55 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   body {
-    @apply bg-surface text-ink font-sans;
+    @apply bg-gray-200 text-ink font-sans;
   }
   *:focus-visible {
     @apply outline-none ring-2 ring-pp-blue ring-offset-2;
   }
 }
 
-/* Simulation stripe pattern */
+/* ─── Mobile Shell ───────────────────────────────────────── */
+.mobile-shell {
+  position: relative;
+  width: 100%;
+  max-width: 430px;
+  min-height: 100svh;
+  background: #F5F7FA;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Scrollable content area above bottom nav */
+.mobile-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 80px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ─── Bottom Nav ─────────────────────────────────────────── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  z-index: 50;
+}
+
+/* ─── Gradient Hero Card ─────────────────────────────────── */
+.hero-gradient {
+  background: linear-gradient(135deg, #003087 0%, #0070E0 60%, #009CDE 100%);
+}
+
+/* ─── Simulation stripe ──────────────────────────────────── */
 .sim-stripe {
   background: repeating-linear-gradient(
     -45deg,
@@ -23,20 +60,28 @@
   );
 }
 
-/* Shimmer animation */
+/* ─── Shimmer ────────────────────────────────────────────── */
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
-
 .animate-shimmer {
   animation: shimmer 1.5s infinite;
 }
 
+/* ─── Horizontal scroll row ──────────────────────────────── */
+.scroll-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll-row::-webkit-scrollbar { display: none; }
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-pulse,
-  .animate-spin,
-  .animate-shimmer {
+  .animate-pulse, .animate-spin, .animate-shimmer {
     animation: none !important;
   }
 }
