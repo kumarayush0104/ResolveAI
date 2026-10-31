@@ -160,18 +160,19 @@ export function Checkout() {
               Pay securely via official PayPal Smart Buttons (Sandbox mode)
             </div>
 
+            {/* Spinner shown while PayPal SDK loads — OUTSIDE buttonsRef div to avoid DOM conflict */}
+            {!buttonsRendered && (
+              <div className="flex flex-col items-center gap-2 py-4 text-ink-soft text-sm">
+                <div className="w-6 h-6 border-2 border-pp-blue border-t-transparent rounded-full animate-spin" />
+                <span>Loading PayPal Smart Buttons...</span>
+              </div>
+            )}
+            {/* PayPal SDK renders buttons directly into this div via DOM manipulation */}
             <div
               ref={buttonsRef}
               id="paypal-button-container"
-              className="min-h-[140px] flex items-center justify-center"
-            >
-              {!buttonsRendered && (
-                <div className="flex flex-col items-center gap-2 py-6 text-ink-soft text-sm">
-                  <div className="w-6 h-6 border-2 border-pp-blue border-t-transparent rounded-full animate-spin" />
-                  <span>Loading PayPal Smart Buttons...</span>
-                </div>
-              )}
-            </div>
+              className={buttonsRendered ? 'min-h-[140px]' : 'hidden'}
+            />
 
             {orderId && (
               <div className="pt-4 border-t border-line text-center space-y-2">
