@@ -1,17 +1,12 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './lib/auth'
 import { ToastProvider } from './components/Toast'
-import { TopBar } from './components/TopBar'
+import { BottomNav } from './components/BottomNav'
 import { Landing } from './pages/Landing'
 import { Checkout } from './pages/Checkout'
 import { CasePage } from './pages/CasePage'
 import { Console } from './pages/Console'
-
-function PageWrapper({ children }: { children: React.ReactNode }) {
-  return <div className="w-full">{children}</div>
-}
 
 function AnimatedRoutes() {
   return (
@@ -25,17 +20,21 @@ function AnimatedRoutes() {
   )
 }
 
-
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
-          <div className="min-h-screen bg-surface flex flex-col">
-            <TopBar />
-            <main className="flex-1">
-              <AnimatedRoutes />
-            </main>
+          {/* Outer page: grey bg so mobile shell pops on desktop */}
+          <div className="min-h-screen bg-gray-300 flex items-start justify-center">
+            <div className="mobile-shell shadow-mobile">
+              {/* Scrollable content */}
+              <div className="mobile-content">
+                <AnimatedRoutes />
+              </div>
+              {/* Sticky bottom nav inside shell */}
+              <BottomNav />
+            </div>
           </div>
         </ToastProvider>
       </AuthProvider>
