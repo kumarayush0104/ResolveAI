@@ -1,283 +1,302 @@
 import React, { useState } from 'react'
-import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { Shield, AlertTriangle, Clock, ArrowRight, User, Building2, CreditCard, Check } from 'lucide-react'
-import { PillButton } from '../components/PillButton'
+import {
+  Shield, AlertTriangle, Clock, ArrowRight,
+  CreditCard, ShoppingBag, BarChart2, RefreshCw, Sparkles,
+} from 'lucide-react'
+import { TopBar } from '../components/TopBar'
 import { Card } from '../components/Card'
+import { PillButton } from '../components/PillButton'
+import { useAuth } from '../lib/auth'
 
-// Animated hero scene: Buyer -> PayPal (with ?/✓ morphing bubble) -> Seller
-function HeroScene() {
+// ── Scenarios ────────────────────────────────────────────────────────────────
+const SCENARIOS = [
+  {
+    icon: <Clock size={20} className="text-warning" />,
+    badge: 'STUCK',
+    badgeColor: 'bg-[#FFF4D6] text-warning',
+    title: 'Stuck Payment',
+    desc: 'Captured in PayPal, silent in your DB. ResolveAI re-queries live APIs and drives recovery.',
+  },
+  {
+    icon: <AlertTriangle size={20} className="text-danger" />,
+    badge: 'DOUBLE-CHARGE',
+    badgeColor: 'bg-[#FDEBE6] text-danger',
+    title: 'Double Charge Risk',
+    desc: 'Idempotency key mismatch or retry storm. Policy rule R04 blocks duplicate captures.',
+  },
+  {
+    icon: <Shield size={20} className="text-pp-blue" />,
+    badge: 'DISPUTE',
+    badgeColor: 'bg-blue-50 text-pp-blue',
+    title: 'Dispute & Refund',
+    desc: 'Buyer opens a dispute. AI Investigator gathers authoritative evidence and proposes resolution.',
+  },
+]
+
+// ── Mini Hero Scene ───────────────────────────────────────────────────────────
+function MiniHero() {
   const [resolved, setResolved] = useState(false)
-
   return (
     <div
-      className="relative w-full max-w-3xl mx-auto h-72 flex items-center justify-center p-4 cursor-pointer select-none"
-      onMouseEnter={() => setResolved(true)}
-      onMouseLeave={() => setResolved(false)}
-      onClick={() => setResolved(!resolved)}
-      title="Hover or click to resolve payment"
+      className="w-full h-32 cursor-pointer select-none"
+      onClick={() => setResolved(r => !r)}
+      title="Tap to resolve"
     >
-      <svg viewBox="0 0 700 220" className="w-full h-full overflow-visible">
+      <svg viewBox="0 0 320 100" className="w-full h-full overflow-visible">
         <defs>
-          <linearGradient id="pathGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#009CDE" />
-            <stop offset="50%" stopColor="#FFC439" />
+          <linearGradient id="miniGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%"   stopColor="#009CDE" />
+            <stop offset="50%"  stopColor="#FFC439" />
             <stop offset="100%" stopColor="#1F8A4C" />
           </linearGradient>
-
-          <filter id="heroShadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="4" stdDeviation="6" floodOpacity="0.15" />
-          </filter>
         </defs>
-
-        {/* Path: Buyer to Center */}
-        <path
-          id="buyerToPaypal"
-          d="M 120 110 L 300 110"
-          fill="none"
-          stroke="url(#pathGradient)"
-          strokeWidth="3"
-          strokeDasharray="6 6"
-          opacity="0.8"
-        />
-
-        {/* Path: Center to Seller */}
-        <path
-          id="paypalToSeller"
-          d="M 400 110 L 580 110"
-          fill="none"
-          stroke={resolved ? '#1F8A4C' : '#CAD1D8'}
-          strokeWidth="3"
-          strokeDasharray={resolved ? '6 6' : '3 3'}
-          className="transition-colors duration-500"
-          opacity="0.8"
-        />
-
-        {/* Traveling money dots: Buyer -> Center */}
-        <circle r="5" fill="#FFC439">
-          <animateMotion dur="2s" repeatCount="indefinite" path="M 120 110 L 300 110" />
+        <path d="M 60 50 L 145 50" fill="none" stroke="url(#miniGrad)"
+          strokeWidth="2.5" strokeDasharray="5 4" opacity="0.9" />
+        <path d="M 175 50 L 260 50" fill="none"
+          stroke={resolved ? '#1F8A4C' : '#EAEDEF'}
+          strokeWidth="2.5" strokeDasharray="5 4"
+          className="transition-colors duration-500" />
+        <circle r="4" fill="#FFC439">
+          <animateMotion dur="1.6s" repeatCount="indefinite" path="M 60 50 L 145 50" />
         </circle>
-        <circle r="4" fill="#009CDE">
-          <animateMotion dur="2s" begin="0.8s" repeatCount="indefinite" path="M 120 110 L 300 110" />
-        </circle>
-
-        {/* Traveling money dots: Center -> Seller (only when resolved) */}
         {resolved && (
-          <circle r="5" fill="#1F8A4C">
-            <animateMotion dur="2s" repeatCount="indefinite" path="M 400 110 L 580 110" />
+          <circle r="4" fill="#1F8A4C">
+            <animateMotion dur="1.6s" repeatCount="indefinite" path="M 175 50 L 260 50" />
           </circle>
         )}
-
-        {/* Left Node: Buyer */}
-        <g transform="translate(80, 110)" filter="url(#heroShadow)">
-          <circle r="36" fill="#001C64" stroke="#009CDE" strokeWidth="2.5" />
-          <foreignObject x="-16" y="-16" width="32" height="32">
-            <div className="w-full h-full flex items-center justify-center text-white">
-              <User size={20} />
-            </div>
-          </foreignObject>
-          <text y="52" textAnchor="middle" fill="#FFFFFF" fontSize="12" fontWeight="600" className="tracking-wide">
-            Buyer
-          </text>
-        </g>
-
-        {/* Center Node: PayPal Engine */}
-        <g transform="translate(350, 110)" filter="url(#heroShadow)">
-          <circle r="48" fill="#FFFFFF" stroke={resolved ? '#1F8A4C' : '#0070E0'} strokeWidth="3" className="transition-colors duration-500" />
-          <foreignObject x="-24" y="-24" width="48" height="48">
-            <div className="w-full h-full flex items-center justify-center text-pp-blue-dark">
-              <CreditCard size={28} />
-            </div>
-          </foreignObject>
-
-          {/* Morphing Bubble: ? (pulsing) morphs into ✓ shield */}
-          <g transform="translate(0, -56)">
-            {resolved ? (
-              <motion.g
-                initial={{ scale: 0.8, rotate: -20 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: 'spring', damping: 15 }}
-              >
-                <circle r="18" fill="#1F8A4C" stroke="#FFFFFF" strokeWidth="2" />
-                <foreignObject x="-10" y="-10" width="20" height="20">
-                  <div className="w-full h-full flex items-center justify-center text-white">
-                    <Check size={14} strokeWidth={3} />
-                  </div>
-                </foreignObject>
-              </motion.g>
-            ) : (
-              <motion.g
-                animate={{ scale: [1, 1.15, 1], y: [0, -3, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-              >
-                <circle r="18" fill="#FFC439" stroke="#2C2E2F" strokeWidth="1.5" />
-                <text
-                  dy=".35em"
-                  textAnchor="middle"
-                  fill="#2C2E2F"
-                  fontSize="16"
-                  fontWeight="bold"
-                  className="select-none font-mono"
-                >
-                  ?
-                </text>
-              </motion.g>
-            )}
-          </g>
-
-          <text y="64" textAnchor="middle" fill="#FFFFFF" fontSize="12" fontWeight="600" className="tracking-wide">
-            PayPal Engine
-          </text>
-        </g>
-
-        {/* Right Node: Seller */}
-        <g transform="translate(620, 110)" filter="url(#heroShadow)">
-          <circle r="36" fill={resolved ? '#1F8A4C' : '#001C64'} stroke={resolved ? '#1F8A4C' : '#CAD1D8'} strokeWidth="2.5" className="transition-colors duration-500" />
-          <foreignObject x="-16" y="-16" width="32" height="32">
-            <div className="w-full h-full flex items-center justify-center text-white">
-              <Building2 size={20} />
-            </div>
-          </foreignObject>
-          <text y="52" textAnchor="middle" fill="#FFFFFF" fontSize="12" fontWeight="600" className="tracking-wide">
-            Seller
-          </text>
-        </g>
+        {/* Buyer */}
+        <circle cx="40" cy="50" r="20" fill="#001C64" stroke="#009CDE" strokeWidth="2" />
+        <text x="40" y="54" textAnchor="middle" fill="white" fontSize="9" fontWeight="600">Buyer</text>
+        {/* PayPal Hub */}
+        <circle cx="160" cy="50" r="26" fill="white"
+          stroke={resolved ? '#1F8A4C' : '#0070E0'}
+          strokeWidth="2.5" className="transition-colors duration-500" />
+        <text x="160" y="47" textAnchor="middle" fill="#003087" fontSize="7" fontWeight="700">Resolve</text>
+        <text x="160" y="57" textAnchor="middle" fill="#003087" fontSize="7" fontWeight="700">AI</text>
+        {/* Morphing bubble */}
+        {resolved ? (
+          <circle cx="160" cy="24" r="11" fill="#1F8A4C">
+            <animate attributeName="r" values="9;11;9" dur="1s" repeatCount="indefinite" />
+          </circle>
+        ) : (
+          <circle cx="160" cy="24" r="10" fill="#FFC439">
+            <animate attributeName="r" values="9;11;9" dur="1.5s" repeatCount="indefinite" />
+          </circle>
+        )}
+        <text x="160" y="28" textAnchor="middle" fill="white" fontSize="11" fontWeight="800">
+          {resolved ? '✓' : '?'}
+        </text>
+        {/* Seller */}
+        <circle cx="280" cy="50" r="20" fill="#001C64"
+          stroke={resolved ? '#1F8A4C' : '#EAEDEF'}
+          strokeWidth="2" className="transition-colors duration-500" />
+        <text x="280" y="54" textAnchor="middle" fill="white" fontSize="9" fontWeight="600">Seller</text>
       </svg>
+      <p className="text-center text-[10px] text-white/60 -mt-1">Tap to resolve payment</p>
     </div>
   )
 }
 
+// ── Role switcher options ─────────────────────────────────────────────────────
+const ROLES = [
+  { key: 'buyer',  label: 'Buyer'   },
+  { key: 'seller', label: 'Seller'  },
+  { key: 'admin',  label: 'Console' },
+] as const
+
+// ── Landing Page ──────────────────────────────────────────────────────────────
 export function Landing() {
   const nav = useNavigate()
+  const { role, switchRole } = useAuth()
 
-  const scenarios = [
-    {
-      icon: <AlertTriangle size={24} className="text-warning" />,
-      title: 'Lost Success Response',
-      desc: 'Backend captured on PayPal, but response timed out locally. ResolveAI fails closed to UNKNOWN, prevents duplicate charge, and reconciles authoritative status.',
-      badge: 'Network Fault',
-      badgeColor: 'bg-[#FFF4D6] text-warning',
-    },
-    {
-      icon: <Shield size={24} className="text-danger" />,
-      title: 'Definitive Failure',
-      desc: 'PayPal explicitly declines payment. Deterministic policy gates fresh retry strictly behind user review and verified failure proof.',
-      badge: 'Declined State',
-      badgeColor: 'bg-[#FDEBE6] text-danger',
-    },
-    {
-      icon: <Clock size={24} className="text-pp-sky" />,
-      title: 'Delayed Reconciliation',
-      desc: 'Capture confirmed via delayed PayPal webhook. Case timeline and state machine update asynchronously via live Server-Sent Events.',
-      badge: 'Asynchronous',
-      badgeColor: 'bg-blue-50 text-pp-blue',
-    },
-  ]
+  const handleRole = (r: 'buyer' | 'seller' | 'admin') => {
+    switchRole(r)
+    if (r === 'admin') nav('/console')
+  }
+
+  const roleLabel =
+    role === 'admin'  ? 'Merchant Console' :
+    role === 'seller' ? 'Seller' : 'Buyer'
+
+  const greeting =
+    new Date().getHours() < 12 ? 'Good morning' :
+    new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening'
 
   return (
-    <div className="min-h-screen bg-surface">
-      {/* Hero Section with radial gradient mesh */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-pp-navy via-pp-blue-dark to-pp-navy text-white pt-16 pb-24 px-6">
-        {/* Subtle radial mesh keyframe drift */}
-        <div className="absolute inset-0 opacity-20 pointer-events-none">
-          <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-pp-sky blur-3xl animate-pulse" />
-          <div className="absolute bottom-0 -right-32 w-96 h-96 rounded-full bg-pp-blue blur-3xl animate-pulse" style={{ animationDelay: '2s' }} />
+    <div className="min-h-full bg-surface">
+
+      {/* ── Hero gradient section ── */}
+      <section className="hero-gradient pb-8 rounded-b-[2.5rem] relative overflow-hidden">
+        {/* Decorative blobs */}
+        <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-white/5 blur-2xl pointer-events-none" />
+        <div className="absolute -bottom-8 -left-10 w-40 h-40 rounded-full bg-white/5 blur-xl pointer-events-none" />
+
+        {/* Top bar */}
+        <TopBar />
+
+        {/* Greeting */}
+        <div className="px-5 mt-1">
+          <p className="text-white/70 text-sm font-medium">{greeting}, {roleLabel} 👋</p>
+          <h1 className="text-white font-bold text-2xl mt-0.5 leading-tight">
+            Payments should never<br />leave you guessing.
+          </h1>
         </div>
 
-        <div className="relative max-w-5xl mx-auto text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-xs font-semibold text-pp-gold tracking-wide">
-            <Shield size={14} />
-            <span>Autonomous Payment Resolution & Recovery Engine</span>
+        {/* Balance / Stats card */}
+        <div className="px-5 mt-5">
+          <div className="bg-white/15 backdrop-blur-sm rounded-3xl p-5 border border-white/20">
+            <p className="text-white/70 text-xs font-semibold uppercase tracking-widest">
+              Autonomous Recovery Engine
+            </p>
+            <div className="flex items-end justify-between mt-2">
+              <div>
+                <p className="text-white font-bold text-3xl tracking-tight">$0.00</p>
+                <p className="text-white/60 text-xs mt-1">Sandbox Mode · PayPal APIs</p>
+              </div>
+              <span className="text-xs font-mono bg-pp-gold/20 text-pp-gold px-2.5 py-1 rounded-full font-semibold border border-pp-gold/30">
+                SANDBOX
+              </span>
+            </div>
+            {/* Mini hero animation */}
+            <div className="mt-4">
+              <MiniHero />
+            </div>
           </div>
+        </div>
 
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white max-w-3xl mx-auto leading-tight">
-            Payments should never leave you guessing.
-          </h1>
-
-          <p className="text-lg text-gray-300 max-w-2xl mx-auto leading-relaxed">
-            ResolveAI eliminates stuck payments, prevents accidental double charges, and pairs authoritative PayPal evidence with an AI Investigator backed by a fail-closed safety engine.
-          </p>
-
-          {/* Interactive animated hero diagram */}
-          <div className="pt-4">
-            <HeroScene />
-          </div>
-
-          {/* Call to Action buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-6">
-            <PillButton
-              variant="gold"
-              onClick={() => nav('/checkout')}
-              className="text-base font-bold shadow-lg shadow-pp-gold/20"
+        {/* Quick action buttons */}
+        <div className="px-5 mt-5 grid grid-cols-4 gap-3">
+          {[
+            { label: 'Checkout', Icon: ShoppingBag, path: '/checkout', bg: 'bg-white/20' },
+            { label: 'Console',  Icon: BarChart2,   path: '/console',  bg: 'bg-white/20' },
+            { label: 'Cases',    Icon: Sparkles,    path: '/console',  bg: 'bg-white/20' },
+            { label: 'Resolve',  Icon: RefreshCw,   path: '/checkout', bg: 'bg-pp-gold/80' },
+          ].map(({ label, Icon, path, bg }) => (
+            <button
+              key={label}
+              onClick={() => nav(path)}
+              className="flex flex-col items-center gap-1.5 group"
             >
-              <span>Start Real Sandbox Checkout</span>
-              <ArrowRight size={18} />
-            </PillButton>
-            <PillButton
-              variant="outline"
-              onClick={() => nav('/console')}
-              className="text-base text-white border-white/30 hover:bg-white/10"
-            >
-              Open Merchant Console
-            </PillButton>
-          </div>
+              <div className={`w-12 h-12 rounded-2xl ${bg} backdrop-blur flex items-center justify-center text-white transition-transform group-active:scale-95`}>
+                <Icon size={20} />
+              </div>
+              <span className="text-white/80 text-[10px] font-semibold">{label}</span>
+            </button>
+          ))}
         </div>
       </section>
 
-      {/* Scenario Cards */}
-      <section className="max-w-6xl mx-auto px-6 py-20">
-        <div className="text-center mb-14">
-          <h2 className="text-3xl font-bold text-pp-blue-dark tracking-tight">
-            Engineered for Real-World Payment Failures
-          </h2>
-          <p className="text-ink-soft mt-3 max-w-2xl mx-auto">
-            Payment systems fail at network and human boundaries. ResolveAI enforces mathematical safety rules before permitting any side-effect.
-          </p>
+      {/* ── Role Switcher ── */}
+      <section className="px-5 mt-6">
+        <p className="text-xs text-ink-soft font-semibold uppercase tracking-wider mb-3">Switch Role</p>
+        <div className="flex items-center bg-white rounded-2xl p-1 border border-line shadow-card gap-1">
+          {ROLES.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => handleRole(key)}
+              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                role === key
+                  ? 'bg-pp-blue-dark text-white shadow-sm'
+                  : 'text-ink-soft hover:text-ink'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
+      </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {scenarios.map((sc, i) => (
-            <div key={i}>
-              <Card className="h-full flex flex-col justify-between hover:shadow-lg transition-all duration-300 border border-line">
-
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="p-3 bg-surface rounded-xl">
-                      {sc.icon}
-                    </div>
-                    <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${sc.badgeColor}`}>
-                      {sc.badge}
-                    </span>
-                  </div>
-
-                  <h3 className="text-lg font-bold text-ink mb-2">
-                    {sc.title}
-                  </h3>
-                  <p className="text-sm text-ink-soft leading-relaxed">
-                    {sc.desc}
-                  </p>
-                </div>
-
-                <div className="pt-6 mt-6 border-t border-line">
-                  <button
-                    onClick={() => nav('/checkout')}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-pp-blue hover:text-pp-blue-dark transition-colors"
-                  >
-                    <span>Simulate in Checkout</span>
-                    <ArrowRight size={12} />
-                  </button>
-                </div>
-              </Card>
+      {/* ── Stats Row ── */}
+      <section className="px-5 mt-6">
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: 'Total Cases', value: '—', color: 'text-pp-blue'  },
+            { label: 'Resolved',    value: '—', color: 'text-success'  },
+            { label: 'Pending',     value: '—', color: 'text-warning'  },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="bg-white rounded-2xl p-4 border border-line shadow-card text-center">
+              <p className={`font-bold text-xl ${color}`}>{value}</p>
+              <p className="text-ink-soft text-[10px] font-semibold mt-0.5 leading-tight">{label}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Footer Info */}
-      <footer className="border-t border-line py-8 text-center text-xs text-ink-soft bg-white">
-        <p>Built on the PayPal Developer Platform · Sandbox environment</p>
-        <p className="mt-1 text-[11px] text-gray-400">
-          OAuth2 Client Credentials · Orders v2 · Payments v2 · Webhooks Signature Verification · Policy Engine (R01–R09)
+      {/* ── CTA Buttons ── */}
+      <section className="px-5 mt-6 flex flex-col gap-3">
+        <PillButton
+          variant="gold"
+          onClick={() => nav('/checkout')}
+          className="w-full text-base font-bold shadow-float"
+        >
+          <ShoppingBag size={18} />
+          <span>Start Sandbox Checkout</span>
+          <ArrowRight size={16} />
+        </PillButton>
+        <PillButton
+          variant="outline"
+          onClick={() => nav('/console')}
+          className="w-full"
+        >
+          Open Merchant Console
+        </PillButton>
+      </section>
+
+      {/* ── Scenarios horizontal scroll ── */}
+      <section className="mt-8 px-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-bold text-pp-blue-dark text-lg">Payment Scenarios</h2>
+          <span className="text-xs text-ink-soft">Tap to simulate →</span>
+        </div>
+        <div className="scroll-row">
+          {SCENARIOS.map((sc, i) => (
+            <div
+              key={i}
+              onClick={() => nav('/checkout')}
+              className="flex-shrink-0 w-[220px] bg-white rounded-2xl border border-line shadow-card p-4 cursor-pointer active:scale-95 transition-transform"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="p-2.5 bg-surface rounded-xl">{sc.icon}</div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${sc.badgeColor}`}>
+                  {sc.badge}
+                </span>
+              </div>
+              <h3 className="font-bold text-ink text-sm mb-1">{sc.title}</h3>
+              <p className="text-xs text-ink-soft leading-relaxed">{sc.desc}</p>
+              <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-pp-blue">
+                <span>Simulate</span><ArrowRight size={11} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── How It Works ── */}
+      <section className="px-5 mt-8">
+        <h2 className="font-bold text-pp-blue-dark text-lg mb-4">How ResolveAI Works</h2>
+        <div className="space-y-3">
+          {[
+            { icon: <CreditCard size={18} className="text-pp-blue" />,  title: 'Real PayPal APIs',    desc: 'OAuth2 + Orders v2 + Payments v2. Every decision is grounded in authoritative live data.' },
+            { icon: <Shield size={18} className="text-success" />,       title: 'Fail-Closed Policy',  desc: 'Rules R01–R09 block any action that cannot be proven safe. Timeouts ≠ failure.' },
+            { icon: <Sparkles size={18} className="text-pp-gold" />,     title: 'AI Investigator',     desc: 'Streams tool calls in real-time. Evidence cites. Buyer & Seller guidance. Policy-adjusted.' },
+          ].map(({ icon, title, desc }) => (
+            <div key={title} className="bg-white rounded-2xl border border-line shadow-card p-4 flex gap-4 items-start">
+              <div className="p-2.5 bg-surface rounded-xl shrink-0">{icon}</div>
+              <div>
+                <p className="font-bold text-ink text-sm">{title}</p>
+                <p className="text-xs text-ink-soft mt-0.5 leading-relaxed">{desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Footer ── */}
+      <footer className="mt-8 px-5 py-6 text-center text-[10px] text-ink-soft border-t border-line">
+        <p>Built on the PayPal Developer Platform · Sandbox</p>
+        <p className="mt-1 text-gray-400">
+          OAuth2 · Orders v2 · Payments v2 · Webhooks · Policy Engine (R01–R09)
         </p>
       </footer>
     </div>
