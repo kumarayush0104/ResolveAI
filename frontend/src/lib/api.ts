@@ -12,7 +12,10 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || `HTTP ${res.status}`)
+    // FastAPI sends either a string or an object such as { rule_id, message } for policy blocks.
+    const d = err.detail
+    const msg = typeof d === 'string' ? d : d?.message || (d ? JSON.stringify(d) : `HTTP ${res.status}`)
+    throw new Error(msg)
   }
   return res.json()
 }
@@ -36,6 +39,13 @@ export const api = {
     req<{ order_id: string; approval_url: string; status: string }>('POST', '/orders', { amount, currency }),
   getOrder: (id: string) => req<any>('GET', `/orders/${id}`),
   captureOrder: (id: string) => req<any>('POST', `/orders/${id}/capture`),
+  // Ask PayPal three ways (Orders API, Payments API, Transaction Search). Read-only.
+  getOrderStatus: (id: string) => req<any>('GET', `/orders/${id}/status`),
+  // Same check, but applies the verified result to the order and its case.
+  reconcileOrder: (id: string) => req<any>('POST', `/orders/${id}/reconcile`),
+  // Merchant roles only.
+  lookupTransaction: (transactionId: string, daysBack = 30) =>
+    req<any>('GET', `/paypal/transactions/${transactionId}?days_back=${daysBack}`),
 
   // Cases
   createCase: (order_id: string) => req<any>('POST', '/cases', { order_id }),
