@@ -3,9 +3,9 @@ import { FlaskConical } from 'lucide-react'
 
 export function SimulationBanner({ message }: { message?: string }) {
   return (
-    <div className="sim-stripe border border-pp-gold rounded-xl p-3 flex items-center gap-2 text-sm font-semibold text-[#2C2E2F] shadow-sm">
-      <FlaskConical size={16} className="text-pp-gold shrink-0" />
-      <span>{message || 'SIMULATION — This event was injected by the Fault-Injection Lab. Not a real PayPal transaction.'}</span>
+    <div className="sim-stripe flex items-start gap-2 rounded-2xl border border-pp-gold p-3 text-[12px] font-bold leading-snug text-ink">
+      <FlaskConical size={16} className="mt-0.5 shrink-0 text-warning" />
+      <span>{message || 'Simulation: this event was injected by the fault lab. It is not a real PayPal transaction.'}</span>
     </div>
   )
 }

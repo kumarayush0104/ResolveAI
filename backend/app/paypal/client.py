@@ -1,3 +1,4 @@
+import json
 import time
 import httpx
 from datetime import datetime, timezone
@@ -23,6 +24,21 @@ class PayPalError(Exception):
         self.message = message
         self.details = details
 
+    @property
+    def issues(self) -> list:
+        """PayPal `details[].issue` codes from the error body, e.g. ORDER_ALREADY_CAPTURED."""
+        try:
+            body = json.loads(self.details) if isinstance(self.details, str) else (self.details or {})
+        except (ValueError, TypeError):
+            return []
+        if not isinstance(body, dict):
+            return []
+        return [
+            d.get("issue")
+            for d in body.get("details", [])
+            if isinstance(d, dict) and d.get("issue")
+        ]
+
 
 @dataclass
 class ProviderSnapshot:
@@ -35,6 +51,14 @@ class ProviderSnapshot:
     source: str = "api"  # api | webhook
     raw_ref: str = ""
     is_simulated: bool = False
+    # Richer evidence (all optional so existing call sites keep working)
+    raw_capture_status: Optional[str] = None   # PayPal's own value: COMPLETED, DECLINED, PARTIALLY_REFUNDED...
+    pending_reason: Optional[str] = None       # capture status_details.reason when PENDING
+    refund_state: Optional[str] = None         # None | PARTIALLY_REFUNDED | REFUNDED
+    amount: Optional[str] = None
+    currency: Optional[str] = None
+    conflict: bool = False                     # True when sources disagreed and we failed closed
+    note: Optional[str] = None                 # human-readable provenance, e.g. recovered via GET order
 
     def __post_init__(self):
         if not self.observed_at:
@@ -103,6 +127,7 @@ class PayPalClient:
         json: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
         timeout: float = 10.0,
+        params: Optional[Dict[str, Any]] = None,
     ) -> httpx.Response:
         """Execute authenticated PayPal API request with timeout safety and error normalization."""
         token = await self.get_token()
@@ -123,6 +148,7 @@ class PayPalClient:
                     url=full_url,
                     json=json,
                     headers=req_headers,
+                    params=params,
                 )
         except httpx.TimeoutException as exc:
             # CRITICAL RULE: Timeouts NEVER map to DENIED/failure

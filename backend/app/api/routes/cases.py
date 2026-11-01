@@ -16,6 +16,8 @@ from backend.app.security.permissions import require_case_access, require_order_
 from backend.app.policy.engine import evaluate
 from backend.app.paypal.orders import get_order, get_capture, refund_capture
 from backend.app.paypal.client import ProviderSnapshot
+from backend.app.services.status_check import check_payment_status
+from backend.app.services.reconciliation import reconcile_case
 from backend.app.services.investigation import run_case_investigation
 from backend.app.agent.prompts import wrap_untrusted_text
 from backend.app.agent.investigator import stream_investigation
@@ -72,13 +74,17 @@ async def open_case(
     )
     attempts = att_res.scalars().all()
 
-    # Initial snapshot
-    init_snap = ProviderSnapshot(
-        order_status=order.status,
-        capture_status="COMPLETED" if order.status == "COMPLETED" else "PENDING",
-        order_id=order.paypal_order_id,
-        source="api",
-    )
+    # Initial snapshot: ask PayPal. Fall back to local knowledge only if every source is unreachable.
+    init_report = await check_payment_status(order, list(attempts))
+    if init_report.reachable:
+        init_snap = init_report.snapshot
+    else:
+        init_snap = ProviderSnapshot(
+            order_status=order.status,
+            capture_status="COMPLETED" if order.status == "COMPLETED" else "PENDING",
+            order_id=order.paypal_order_id,
+            source="api",
+        )
     init_decision = evaluate(snapshot=init_snap, attempts=attempts, events=[])
 
     case = Case(
@@ -142,14 +148,10 @@ async def get_case_detail(
     )
     attempts = att_res.scalars().all()
 
-    # Authoritative live PayPal snapshot
-    try:
-        capture_id = next((a.paypal_capture_id for a in attempts if a.paypal_capture_id), None)
-        if capture_id:
-            snapshot = await get_capture(capture_id)
-        else:
-            snapshot = await get_order(case.order.paypal_order_id)
-    except Exception:
+    # Authoritative live PayPal status: Orders API + Payments API + Transaction Search
+    status_report = await check_payment_status(case.order, list(attempts))
+    snapshot = status_report.snapshot
+    if not status_report.reachable:
         snapshot = ProviderSnapshot(
             order_status=case.order.status,
             capture_status=case.current_policy_state,
@@ -174,6 +176,7 @@ async def get_case_detail(
         "permitted_actions": case.permitted_actions,
         "evidence_bundle": {
             "snapshot": snapshot.to_dict(),
+            "status_report": status_report.to_dict(),
             "attempts": [
                 {
                     "id": a.id,
@@ -252,21 +255,9 @@ async def trigger_investigation(
         e.description for e in case.events if e.source == "USER" and e.event_type == "CASE_MESSAGE"
     ]
 
-    # Authoritative live PayPal snapshot
-    try:
-        capture_id = next((a.paypal_capture_id for a in attempts if a.paypal_capture_id), None)
-        if capture_id:
-            snapshot = await get_capture(capture_id)
-        else:
-            snapshot = await get_order(order.paypal_order_id)
-    except Exception:
-        snapshot = ProviderSnapshot(
-            order_status="UNKNOWN",
-            capture_status="UNKNOWN",
-            order_id=order.paypal_order_id,
-            source="api",
-            raw_ref="Snapshot unavailable during investigation",
-        )
+    # Authoritative live PayPal status (all sources). Unreachable -> UNKNOWN, never a failure.
+    status_report = await check_payment_status(order, attempts)
+    snapshot = status_report.snapshot
 
     async def generate_sse():
         final_result_data = None
@@ -278,6 +269,7 @@ async def trigger_investigation(
             events=case.events,
             messages=messages,
             session=session,
+            status_report=status_report.to_dict(),
         ):
             if event.get("type") == "final":
                 final_result_data = event.get("result")
@@ -420,7 +412,8 @@ async def approve_case_action(
     require_case_access(case, current_user)
 
     action_upper = action.upper()
-    if action_upper not in case.permitted_actions:
+    # RECONCILE only reads PayPal, so it is allowed in every state. Everything else is policy-gated.
+    if action_upper != "RECONCILE" and action_upper not in case.permitted_actions:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Action '{action_upper}' is not currently permitted by policy engine. Permitted: {case.permitted_actions}",
@@ -436,6 +429,27 @@ async def approve_case_action(
     session.add(approval)
 
     # Perform action side-effects
+    if action_upper == "RECONCILE":
+        # "Check PayPal again": run a real multi-source check and let the policy engine re-decide.
+        session.add(approval)
+        await session.flush()
+        out = await reconcile_case(case.id, session, record_evidence=True)
+        await session.refresh(case)
+        await event_bus.broadcast(case.id, {
+            "type": "action_approved",
+            "action": action_upper,
+            "case_id": case.id,
+            "state": case.current_policy_state,
+        })
+        return {
+            "case_id": case.id,
+            "action": action_upper,
+            "state": case.current_policy_state,
+            "permitted_actions": case.permitted_actions,
+            "state_changed": out["state_changed"] if out else False,
+            "report": out["report"] if out else None,
+        }
+
     if action_upper == "REFUND":
         # Find capture ID
         att_res = await session.execute(

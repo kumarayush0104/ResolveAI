@@ -1,87 +1,53 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  html, body, #root { height: 100%; }
   body {
-    @apply bg-gray-200 text-ink font-sans;
+    @apply bg-canvas text-ink font-sans antialiased;
   }
   *:focus-visible {
-    @apply outline-none ring-2 ring-pp-blue ring-offset-2;
+    @apply outline-none ring-2 ring-cyan ring-offset-2 ring-offset-white;
   }
 }
 
-/* ─── Mobile Shell ───────────────────────────────────────── */
-.mobile-shell {
-  position: relative;
-  width: 100%;
-  max-width: 430px;
-  min-height: 100svh;
-  background: #F5F7FA;
-  display: flex;
-  flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
+/* Site backdrop behind the phone */
+.site-bg {
+  background:
+    radial-gradient(900px 500px at 85% 10%, #DDF1FC 0%, transparent 60%),
+    radial-gradient(700px 500px at 0% 100%, #E8F3FB 0%, transparent 60%),
+    #F6FAFD;
 }
 
-/* Scrollable content area above bottom nav */
-.mobile-content {
-  flex: 1;
-  overflow-y: auto;
-  padding-bottom: 80px;
-  -webkit-overflow-scrolling: touch;
-}
+/* Hide scrollbars inside the phone but keep scrolling */
+.phone-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+.phone-scroll::-webkit-scrollbar { display: none; }
 
-/* ─── Bottom Nav ─────────────────────────────────────────── */
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  max-width: 430px;
-  z-index: 50;
-}
-
-/* ─── Gradient Hero Card ─────────────────────────────────── */
-.hero-gradient {
-  background: linear-gradient(135deg, #003087 0%, #0070E0 60%, #009CDE 100%);
-}
-
-/* ─── Simulation stripe ──────────────────────────────────── */
+/* Simulation stripe pattern */
 .sim-stripe {
   background: repeating-linear-gradient(
     -45deg,
-    rgba(255,196,57,0.15) 0px,
-    rgba(255,196,57,0.15) 4px,
-    rgba(44,46,47,0.08) 4px,
-    rgba(44,46,47,0.08) 8px
+    rgba(255,196,57,0.18) 0px,
+    rgba(255,196,57,0.18) 4px,
+    rgba(30,42,59,0.07) 4px,
+    rgba(30,42,59,0.07) 8px
   );
 }
 
-/* ─── Shimmer ────────────────────────────────────────────── */
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
 }
-.animate-shimmer {
-  animation: shimmer 1.5s infinite;
-}
-
-/* ─── Horizontal scroll row ──────────────────────────────── */
-.scroll-row {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 8px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-.scroll-row::-webkit-scrollbar { display: none; }
+.animate-shimmer { animation: shimmer 1.5s infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-pulse, .animate-spin, .animate-shimmer {
+  .animate-pulse,
+  .animate-spin,
+  .animate-ping,
+  .animate-bounce,
+  .animate-shimmer {
     animation: none !important;
   }
 }

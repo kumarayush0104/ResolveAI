@@ -1,68 +1,30 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { FlaskConical, X, Zap, Play, Sparkles } from 'lucide-react'
+import { FlaskConical, Zap, Play, Sparkles } from 'lucide-react'
+import { Sheet } from '../components/Sheet'
 import { api } from '../lib/api'
 import { useToast } from '../components/Toast'
 
-// "Run Demo Scenario" section
+// One-click demo scenarios
 const DEMO_SCENARIOS = [
-  { id: 'run-scenario-1', label: 'Scenario 1: Lost Success Response', desc: '3-step: UNKNOWN → reconciler → COMPLETED via SSE', color: 'warning' },
-  { id: 'run-scenario-2', label: 'Scenario 2: Definitive Failure + Safe Retry', desc: 'DENIED → AI diagnoses → R04 gates retry', color: 'danger' },
-  { id: 'run-scenario-3', label: 'Scenario 3: Delayed Reconciliation', desc: 'PENDING → delayed COMPLETED webhook → live SSE toast', color: 'unknown' },
+  { id: 'run-scenario-1', label: 'Scenario 1: Lost success response', desc: 'Unknown → reconciler → Completed, live over SSE' },
+  { id: 'run-scenario-2', label: 'Scenario 2: Definitive failure and safe retry', desc: 'Denied → AI diagnoses → rule R04 gates the retry' },
+  { id: 'run-scenario-3', label: 'Scenario 3: Delayed reconciliation', desc: 'Pending → delayed Completed webhook → live SSE toast' },
 ]
 
-// 8 lab actions
+// Individual fault injections
 const LAB_ACTIONS = [
-  {
-    id: 'lose-success-response',
-    label: 'Lose Success Response',
-    desc: 'Real capture → UNKNOWN, reconciler recovers via GET',
-    danger: false,
-  },
-  {
-    id: 'inject-failure',
-    label: 'Inject Definitive Failure',
-    desc: 'Simulated DENIED snapshot, policy gates retry',
-    danger: true,
-  },
-  {
-    id: 'inject-pending',
-    label: 'Inject Pending',
-    desc: 'Simulated PAYMENT.CAPTURE.PENDING event',
-    danger: false,
-  },
-  {
-    id: 'delayed-event',
-    label: 'Deliver Delayed Event',
-    desc: 'COMPLETED arrives after delay via SSE broadcast',
-    danger: false,
-  },
-  {
-    id: 'duplicate-webhook',
-    label: 'Duplicate Webhook',
-    desc: 'Same event twice → deduplicated, no duplicate side-effects',
-    danger: false,
-  },
-  {
-    id: 'out-of-order',
-    label: 'Out-of-Order Event',
-    desc: 'Older event after new → engine does not regress state',
-    danger: false,
-  },
-  {
-    id: 'prompt-injection',
-    label: 'Prompt Injection',
-    desc: '"Ignore previous rules" in context note → policy blocks',
-    danger: true,
-  },
-  {
-    id: 'concurrent-retry',
-    label: 'Concurrent Retry',
-    desc: 'Two simultaneous retries → exactly one wins (409 on second)',
-    danger: false,
-  },
+  { id: 'lose-success-response', label: 'Lose success response',    desc: 'Real capture → Unknown; the reconciler recovers it via GET', danger: false },
+  { id: 'inject-failure',        label: 'Inject definitive failure', desc: 'Simulated Denied snapshot; policy gates the retry',          danger: true  },
+  { id: 'inject-pending',        label: 'Inject pending',            desc: 'Simulated PAYMENT.CAPTURE.PENDING event',                    danger: false },
+  { id: 'delayed-event',         label: 'Deliver delayed event',     desc: 'Completed arrives after a delay via SSE broadcast',          danger: false },
+  { id: 'duplicate-webhook',     label: 'Duplicate webhook',         desc: 'Same event twice → deduplicated, no duplicate side effects',  danger: false },
+  { id: 'out-of-order',          label: 'Out-of-order event',        desc: 'An older event after a newer one → state does not regress',   danger: false },
+  { id: 'prompt-injection',      label: 'Prompt injection',          desc: '“Ignore previous rules” in a note → the policy blocks it',   danger: true  },
+  { id: 'concurrent-retry',      label: 'Concurrent retry',          desc: 'Two simultaneous retries → exactly one wins (409 on second)', danger: false },
 ]
 
+/** Bottom sheet. Render inside <Overlay><AnimatePresence>…</AnimatePresence></Overlay>. */
 export function LabDrawer({
   orderId,
   caseId,
@@ -79,7 +41,7 @@ export function LabDrawer({
     setRunning(actionId)
     try {
       await api.labAction(actionId, { order_id: orderId, case_id: caseId })
-      addToast(`Simulation action '${actionId}' executed.`, 'success')
+      addToast(`Ran “${actionId}” in the simulator.`, 'success')
     } catch (e: any) {
       addToast(`Lab error: ${e.message}`, 'info')
     } finally {
@@ -88,105 +50,69 @@ export function LabDrawer({
   }
 
   return (
-    <motion.div
-      initial={{ x: '100%' }}
-      animate={{ x: 0 }}
-      exit={{ x: '100%' }}
-      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="fixed right-0 top-0 h-full w-96 max-w-[90vw] bg-[#1a1a2e] text-white shadow-2xl z-50 flex flex-col"
+    <Sheet
+      tall
+      tone="dark"
+      onClose={onClose}
+      title={
+        <span className="flex items-center gap-2">
+          <FlaskConical size={18} className="text-pp-gold" />
+          Fault lab
+        </span>
+      }
     >
-      <div className="sim-stripe p-4 flex items-center justify-between border-b border-pp-gold/30">
-        <div className="flex items-center gap-2">
-          <FlaskConical size={20} className="text-pp-gold shrink-0" />
-          <span className="font-bold text-sm text-[#2C2E2F] uppercase tracking-wide">
-            SIMULATION — Fault Lab
-          </span>
-        </div>
-        <button
-          onClick={onClose}
-          className="text-[#2C2E2F] hover:opacity-70 p-1 transition-opacity"
-          aria-label="Close lab drawer"
-        >
-          <X size={20} />
-        </button>
+      <p className="sim-stripe -mx-1 mb-4 rounded-2xl border border-pp-gold/40 p-3 text-[12px] leading-relaxed text-white/90">
+        Simulated events for order <strong className="font-mono text-pp-gold">{orderId.slice(0, 12)}</strong>. Every one
+        is flagged as a simulation and goes through the policy engine. No real money moves.
+      </p>
+
+      <div className="mb-2 flex items-center gap-1.5 text-[13px] font-extrabold text-pp-gold">
+        <Sparkles size={14} /> Demo scenarios
+      </div>
+      <div className="space-y-2">
+        {DEMO_SCENARIOS.map((sc) => (
+          <motion.button
+            key={sc.id}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => run(sc.id)}
+            disabled={!!running}
+            className="w-full rounded-2xl border border-pp-gold/40 bg-pp-gold/10 p-3.5 text-left disabled:opacity-50"
+          >
+            <div className="flex items-center gap-2">
+              <Play size={13} className="fill-pp-gold text-pp-gold" />
+              <span className="text-[13px] font-bold">{sc.label}</span>
+              {running === sc.id && (
+                <span className="ml-auto h-3.5 w-3.5 animate-spin rounded-full border-2 border-pp-gold border-t-transparent" />
+              )}
+            </div>
+            <p className="mt-1 text-[12px] leading-snug text-white/65">{sc.desc}</p>
+          </motion.button>
+        ))}
       </div>
 
-      <div className="p-4 border-b border-white/10 text-xs text-gray-300">
-        Simulate edge cases against active Order <strong className="text-pp-gold font-mono">{orderId.slice(0, 12)}</strong>.
-        All events pass through the policy engine flagged <code className="text-pp-gold">is_simulated=true</code>.
+      <div className="mb-2 mt-6 text-[13px] font-extrabold text-white/70">Single fault injections</div>
+      <div className="space-y-2">
+        {LAB_ACTIONS.map((action) => (
+          <motion.button
+            key={action.id}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => run(action.id)}
+            disabled={!!running}
+            className={`w-full rounded-2xl border p-3.5 text-left disabled:opacity-50 ${
+              action.danger ? 'border-danger/50 bg-danger/10' : 'border-white/10 bg-white/5'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Zap size={14} className={action.danger ? 'text-[#FF8A66]' : 'text-pp-gold'} />
+              <span className="text-[13px] font-bold">{action.label}</span>
+              {running === action.id && (
+                <span className="ml-auto h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              )}
+            </div>
+            <p className="mt-1 text-[12px] leading-snug text-white/60">{action.desc}</p>
+          </motion.button>
+        ))}
       </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Prominent Demo Scenarios Section */}
-        <div>
-          <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-pp-gold mb-2.5">
-            <Sparkles size={14} className="text-pp-gold" />
-            <span>Run Demo Scenario (One-Click)</span>
-          </div>
-          <div className="space-y-2">
-            {DEMO_SCENARIOS.map((sc) => (
-              <motion.button
-                key={sc.id}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => run(sc.id)}
-                disabled={!!running}
-                className="w-full text-left p-3.5 rounded-xl border border-pp-gold/40 bg-gradient-to-r from-pp-gold/15 to-transparent hover:from-pp-gold/25 transition-all disabled:opacity-50"
-              >
-                <div className="flex items-center gap-2">
-                  <Play size={13} className="text-pp-gold fill-pp-gold" />
-                  <span className="font-semibold text-xs text-white">{sc.label}</span>
-                  {running === sc.id && (
-                    <span className="ml-auto w-3 h-3 border border-pp-gold border-t-transparent rounded-full animate-spin" />
-                  )}
-                </div>
-                <p className="text-[11px] text-gray-300 mt-1 leading-snug">
-                  {sc.desc}
-                </p>
-              </motion.button>
-            ))}
-          </div>
-        </div>
-
-        {/* Individual Fault Actions Section */}
-        <div className="border-t border-white/10 pt-3">
-          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-            Individual Fault Injections
-          </div>
-          <div className="space-y-2.5">
-            {LAB_ACTIONS.map((action) => (
-              <motion.button
-                key={action.id}
-                whileTap={{ x: [0, -4, 4, -4, 4, 0], transition: { duration: 0.3 } }}
-                onClick={() => run(action.id)}
-                disabled={!!running}
-                className={`w-full text-left p-3.5 rounded-xl border transition-all ${
-                  action.danger
-                    ? 'border-danger/40 bg-danger/10 hover:bg-danger/20'
-                    : 'border-pp-gold/20 bg-white/5 hover:bg-white/10'
-                } disabled:opacity-50`}
-              >
-                <div className="flex items-center gap-2">
-                  <Zap
-                    size={14}
-                    className={action.danger ? 'text-danger' : 'text-pp-gold'}
-                  />
-                  <span className="font-semibold text-xs">{action.label}</span>
-                  {running === action.id && (
-                    <span className="ml-auto w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
-                  )}
-                </div>
-                <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
-                  {action.desc}
-                </p>
-              </motion.button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="p-4 border-t border-white/10 text-center text-[11px] text-gray-400">
-        Controlled sandbox fault injection · Never touches live money
-      </div>
-    </motion.div>
+    </Sheet>
   )
 }
