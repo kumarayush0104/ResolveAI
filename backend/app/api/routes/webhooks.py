@@ -8,8 +8,7 @@ from backend.app.config import settings
 from backend.app.db.session import get_db
 from backend.app.db.models import WebhookEvent, Order, Case, PaymentAttempt, CaseEvent
 from backend.app.paypal.webhooks import verify_webhook_signature
-from backend.app.paypal.orders import get_order, get_capture
-from backend.app.policy.engine import evaluate
+from backend.app.services.reconciliation import reconcile_case, reconcile_order
 from backend.app.services.stream_bus import event_bus
 
 logger = logging.getLogger(__name__)
@@ -79,55 +78,57 @@ async def receive_paypal_webhook(
     await session.commit()
     await session.refresh(webhook_record)
 
-    # 4. Authoritative Re-fetch: Re-GET the resource directly from PayPal
-    # This prevents trusting stale out-of-order payloads
-    order_id = None
-    if resource_type == "capture" or "CAPTURE" in event_type:
-        # Related order ID might be in supplementary_data or links
-        order_id = (
-            resource.get("supplementary_data", {})
-            .get("related_ids", {})
-            .get("order_id")
-        )
-    elif resource_type == "checkout-order" or "ORDER" in event_type:
-        order_id = resource_id
+    # 4. Find the order this event is about.
+    related = (resource.get("supplementary_data") or {}).get("related_ids") or {}
+    paypal_order_id = related.get("order_id")
+    if not paypal_order_id and (resource_type == "checkout-order" or event_type.startswith("CHECKOUT.ORDER")):
+        paypal_order_id = resource_id
+    capture_id = related.get("capture_id") or (resource_id if event_type.startswith("PAYMENT.CAPTURE") else None)
 
-    # If we can match to an order, re-fetch and update case
-    if order_id:
-        ord_stmt = select(Order).where((Order.paypal_order_id == order_id) | (Order.id == order_id))
-        order = (await session.execute(ord_stmt)).scalar_one_or_none()
+    order = None
+    if paypal_order_id:
+        order = (await session.execute(
+            select(Order).where((Order.paypal_order_id == paypal_order_id) | (Order.id == paypal_order_id))
+        )).scalar_one_or_none()
+    if order is None and capture_id:
+        order = (await session.execute(
+            select(Order).join(PaymentAttempt, PaymentAttempt.order_id == Order.id)
+            .where(PaymentAttempt.paypal_capture_id == capture_id)
+        )).scalars().first()
 
-        if order:
+    if order is not None:
+        case = (await session.execute(select(Case).where(Case.order_id == order.id))).scalar_one_or_none()
+
+        if case:
+            session.add(CaseEvent(
+                case_id=case.id,
+                source="WEBHOOK",
+                event_type=event_type,
+                description=f"Verified webhook received: {event_type} for resource {resource_id}",
+                is_simulated=False,
+            ))
+            await session.commit()
+
+        if event_type == "CHECKOUT.ORDER.APPROVED":
+            # Approved means the buyer agreed to pay. Nothing has been captured, so no state change.
+            pass
+        else:
+            # Never trust the payload alone: events can repeat and arrive out of order. Ask PayPal
+            # (Orders API, capture, Transaction Search) and let the policy engine decide the state.
             try:
-                snap = await get_order(order.paypal_order_id)
-                if snap.capture_status == "COMPLETED":
-                    order.status = "COMPLETED"
-                elif snap.capture_status == "DENIED":
-                    order.status = "DENIED"
-
-                # Update case if one exists
-                case_stmt = select(Case).where(Case.order_id == order.id)
-                case = (await session.execute(case_stmt)).scalar_one_or_none()
                 if case:
-                    ev = CaseEvent(
-                        case_id=case.id,
-                        source="WEBHOOK",
-                        event_type=event_type,
-                        description=f"Verified webhook received: {event_type} for resource {resource_id}",
-                        is_simulated=False,
-                    )
-                    session.add(ev)
-
-                    # Update case status
-                    case.status = snap.capture_status
-                    case.current_policy_state = snap.capture_status
+                    await reconcile_case(case.id, session)
+                else:
+                    await reconcile_order(session, order)
+                if case:
+                    await session.refresh(case)
                     await event_bus.broadcast(case.id, {
                         "type": "webhook_event",
                         "event_type": event_type,
                         "state": case.current_policy_state,
                     })
             except Exception as exc:
-                logger.error("Failed to re-fetch resource for order %s: %s", order_id, exc)
+                logger.error("Failed to reconcile order %s after webhook: %s", order.id, exc)
 
     webhook_record.processed = True
     await session.commit()
