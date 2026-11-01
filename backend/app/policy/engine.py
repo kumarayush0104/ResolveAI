@@ -46,7 +46,7 @@ def evaluate(
     has_refund_completed = any(
         _get_event_type(e) in ("PAYMENT.CAPTURE.REFUNDED", "REFUND_COMPLETED")
         for e in events
-    )
+    ) or bool(snapshot and getattr(snapshot, "refund_state", None) == "REFUNDED")
     has_refund_requested = any(
         _get_event_type(e) in ("REFUND_REQUESTED", "REFUND_PENDING", "PAYMENT.CAPTURE.REFUND.PENDING")
         for e in events
