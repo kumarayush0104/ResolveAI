@@ -10,6 +10,7 @@ from backend.app.paypal.client import ProviderSnapshot
 from backend.app.policy.engine import evaluate
 from backend.app.agent.investigator import run_investigation
 from backend.app.services.stream_bus import event_bus
+from backend.app.services.status_check import check_payment_status
 
 
 async def run_case_investigation(
@@ -32,30 +33,16 @@ async def run_case_investigation(
     )
     attempts = list(attempts_res.scalars().all())
 
-    # Get authoritative snapshot from PayPal
-    snapshot = None
-    try:
-        # Check if any attempt has a capture_id
-        capture_id = next((a.paypal_capture_id for a in attempts if a.paypal_capture_id), None)
-        if capture_id:
-            snapshot = await get_capture(capture_id)
-        else:
-            snapshot = await get_order(order.paypal_order_id)
-    except Exception:
-        # Network / lookup failed -> UNKNOWN snapshot
-        snapshot = ProviderSnapshot(
-            order_status="UNKNOWN",
-            capture_status="UNKNOWN",
-            order_id=order.paypal_order_id,
-            source="api",
-            raw_ref="Failed to reach PayPal during investigation",
-        )
+    # Get authoritative status from PayPal (Orders API + Payments API + Transaction Search)
+    status_report = await check_payment_status(order, attempts)
+    snapshot = status_report.snapshot
 
     # 2. Run AI Investigator
     investigation_result = await run_investigation(
         snapshot=snapshot,
         attempts=attempts,
         events=case.events,
+        status_report=status_report.to_dict(),
     )
 
     ai_proposal = {
