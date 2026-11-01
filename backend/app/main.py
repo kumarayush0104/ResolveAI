@@ -15,6 +15,7 @@ from backend.app.api.routes.auth import router as auth_router
 from backend.app.api.routes.orders import router as orders_router
 from backend.app.api.routes.cases import router as cases_router
 from backend.app.api.routes.webhooks import router as webhooks_router
+from backend.app.api.routes.transactions import router as transactions_router
 from backend.app.api.routes.metrics import router as metrics_router
 from backend.app.api.routes.lab import router as lab_router
 from backend.app.api.routes.stream import router as stream_router
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(cases_router, prefix="/api")
     app.include_router(stream_router, prefix="/api")
     app.include_router(webhooks_router, prefix="/api")
+    app.include_router(transactions_router, prefix="/api")
     app.include_router(metrics_router, prefix="/api")
     app.include_router(lab_router, prefix="/api")
     app.include_router(config_router, prefix="/api")
