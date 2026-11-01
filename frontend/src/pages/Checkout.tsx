@@ -49,7 +49,7 @@ export function Checkout() {
 
     const script = document.createElement('script')
     script.id = scriptId
-    script.src = `https://www.paypal.com/sdk/js?client-id=${config.paypal_client_id}&currency=USD&intent=capture`
+   script.src = `https://www.paypal.com/sdk/js?client-id=${config.paypal_client_id}&currency=USD&intent=capture&disable-funding=card,credit,paylater`
     script.async = true
     script.onload = () => renderButtons()
     script.onerror = () => {
