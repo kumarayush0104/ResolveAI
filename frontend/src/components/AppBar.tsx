@@ -37,7 +37,7 @@ export function AppBar() {
   const pick = (r: string) => {
     switchRole(r)
     setRolesOpen(false)
-    nav(r === 'admin' ? '/console' : '/')
+    nav(r === 'buyer' ? '/' : '/console')
   }
 
   return (

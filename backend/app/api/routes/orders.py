@@ -1,6 +1,7 @@
 import uuid
 import json
-from typing import Optional
+from decimal import Decimal, ROUND_HALF_UP
+from typing import List, Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy import select
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import settings
 from backend.app.db.session import get_db
-from backend.app.db.models import Order, PaymentAttempt, User, Case, CaseEvent
+from backend.app.db.models import Order, OrderLineItem, PaymentAttempt, Product, User, Case, CaseEvent
 from backend.app.security.auth import get_current_user
 from backend.app.security.permissions import require_order_access
 from backend.app.paypal.orders import create_order, capture_order, get_order
@@ -26,10 +27,16 @@ from backend.app.services.status_check import check_payment_status
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 
+class CreateOrderItem(BaseModel):
+    product_id: str
+    quantity: int = Field(..., ge=1, le=99)
+
+
 class CreateOrderRequest(BaseModel):
-    amount: float = Field(..., gt=0.0, description="Purchase amount")
+    amount: Optional[float] = Field(default=None, gt=0.0, description="Legacy purchase amount")
     currency: str = Field(default="USD", max_length=3)
     request_id: Optional[str] = None
+    items: List[CreateOrderItem] = Field(default_factory=list)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -39,12 +46,34 @@ async def create_new_order(
     session: AsyncSession = Depends(get_db),
     paypal_request_id: Optional[str] = Header(None, alias="PayPal-Request-Id"),
 ):
-    """Create a new PayPal order, persist to database, and return approval URL."""
+    """Create a PayPal order using the current catalog prices and persist its item snapshot."""
     req_id = payload.request_id or paypal_request_id or str(uuid.uuid4())
+    order_items = []
+    if payload.items:
+        if payload.currency.upper() != "USD":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Catalog items are priced in USD")
+        product_ids = {item.product_id for item in payload.items}
+        products = (await session.execute(
+            select(Product).where(Product.id.in_(product_ids), Product.active.is_(True))
+        )).scalars().all()
+        by_id = {product.id: product for product in products}
+        if len(by_id) != len(product_ids):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "One or more cart items are unavailable")
+        subtotal = Decimal("0.00")
+        for item in payload.items:
+            product = by_id[item.product_id]
+            price = Decimal(str(product.price)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            subtotal += price * item.quantity
+            order_items.append((product, item.quantity, price))
+        amount = float(subtotal.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    elif payload.amount is not None:
+        amount = payload.amount
+    else:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Provide cart items or an amount")
 
     try:
         paypal_res = await create_order(
-            amount=payload.amount,
+            amount=amount,
             currency=payload.currency,
             request_id=req_id,
         )
@@ -57,12 +86,24 @@ async def create_new_order(
     order = Order(
         paypal_order_id=paypal_res["order_id"],
         user_id=current_user.id,
-        amount=payload.amount,
+        amount=amount,
         currency=payload.currency,
         status="CREATED",
         paypal_approval_url=paypal_res.get("approval_url"),
     )
     session.add(order)
+    await session.flush()
+    if order_items:
+        session.add_all([
+            OrderLineItem(
+                order_id=order.id,
+                product_id=product.id,
+                name=product.name,
+                quantity=quantity,
+                unit_price=float(price),
+            )
+            for product, quantity, price in order_items
+        ])
     await session.commit()
     await session.refresh(order)
 
@@ -72,6 +113,10 @@ async def create_new_order(
         "paypal_order_id": order.paypal_order_id,
         "amount": order.amount,
         "currency": order.currency,
+        "items": [
+            {"product_id": product.id, "name": product.name, "quantity": quantity, "unit_price": float(price)}
+            for product, quantity, price in order_items
+        ],
         "status": order.status,
         "approval_url": order.paypal_approval_url,
     }

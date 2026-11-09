@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.app.config import settings, PROJECT_ROOT
 from backend.app.db.session import init_db_sync
-from backend.app.db.seed import seed_users_sync
+from backend.app.db.seed import seed_products_sync, seed_users_sync
 from backend.app.services.reconciliation import reconciler_background_loop
 from backend.app.healthz import router as health_router
 from backend.app.api.routes.auth import router as auth_router
@@ -20,6 +20,7 @@ from backend.app.api.routes.metrics import router as metrics_router
 from backend.app.api.routes.lab import router as lab_router
 from backend.app.api.routes.stream import router as stream_router
 from backend.app.api.routes.config_route import router as config_router
+from backend.app.api.routes.catalog import router as catalog_router
 
 
 @asynccontextmanager
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
 
     # 2. Seed demo users
     seed_users_sync()
+    seed_products_sync()
 
     # 3. Start background reconciler loop
     reconciler_task = asyncio.create_task(reconciler_background_loop(interval_seconds=30))
@@ -70,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(metrics_router, prefix="/api")
     app.include_router(lab_router, prefix="/api")
     app.include_router(config_router, prefix="/api")
+    app.include_router(catalog_router, prefix="/api")
 
     # Mount health probe at root
     app.include_router(health_router)

@@ -21,6 +21,7 @@ import { PaymentStatusPanel } from '../components/PaymentStatusPanel'
 import { StepTracker } from '../components/StepTracker'
 import { LabDrawer } from './Lab'
 import { useToast } from '../components/Toast'
+import { useAuth } from '../lib/auth'
 
 interface ToolCallChip {
   id: string
@@ -53,6 +54,7 @@ export function CasePage() {
   const { id: caseId } = useParams<{ id: string }>()
   const nav = useNavigate()
   const { addToast } = useToast()
+  const { role } = useAuth()
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -227,9 +229,16 @@ export function CasePage() {
     if (!caseData || !caseId) return
     if (action === 'RECONCILE') return handleCheckNow()
 
+    const refundEvents = (caseData.events ?? []).filter((event: any) =>
+      ['REFUND_REQUESTED', 'REFUND_SUBMITTED', 'REFUND_REQUEST_DENIED'].includes(event.event_type),
+    )
+    const waitingForSeller = refundEvents[refundEvents.length - 1]?.event_type === 'REFUND_REQUESTED'
+    const sellerDecision = (role === 'seller' || role === 'admin')
+      && waitingForSeller
+      && ['REFUND', 'DENY_REFUND'].includes(action)
     const isPermitted = caseData.permitted_actions?.includes(action)
 
-    if (!isPermitted) {
+    if (!isPermitted && !sellerDecision) {
       // Find matching blocked action rule
       const blocked = caseData.policy_decision?.blocked_actions?.find(
         (b: any) => b.action === action
@@ -245,8 +254,11 @@ export function CasePage() {
     }
 
     try {
-      await api.approveAction(caseId, action, `Approved from Case Page UI`)
-      addToast(`Action ${action} approved and submitted.`, 'success')
+      await api.approveAction(caseId, action, `${role} action from Case Page UI`)
+      const message = action === 'REFUND'
+        ? role === 'buyer' ? 'Refund request sent to the seller.' : 'Refund approved and submitted to PayPal.'
+        : action === 'DENY_REFUND' ? 'Refund request declined.' : `Action ${action} approved and submitted.`
+      addToast(message, 'success')
       loadCase()
     } catch (err: any) {
       addToast(`Action execution failed: ${err.message}`, 'warning')
@@ -292,7 +304,12 @@ export function CasePage() {
   const currentState = caseData.current_policy_state || caseData.status
   const permittedActions: string[] = caseData.permitted_actions || []
   const retryOk = permittedActions.includes('RETRY') || permittedActions.includes('ALLOW_RETRY')
-  const refundOk = permittedActions.includes('REFUND')
+  const refundOk = role === 'buyer' && permittedActions.includes('REFUND')
+  const refundEvents = (caseData.events ?? []).filter((event: any) =>
+    ['REFUND_REQUESTED', 'REFUND_SUBMITTED', 'REFUND_REQUEST_DENIED'].includes(event.event_type),
+  )
+  const waitingForSeller = refundEvents[refundEvents.length - 1]?.event_type === 'REFUND_REQUESTED'
+  const sellerMayDecideRefund = (role === 'seller' || role === 'admin') && waitingForSeller
   const order = caseData.evidence_bundle?.order
 
   return (
@@ -370,15 +387,38 @@ export function CasePage() {
             {retryOk ? <RotateCcw size={16} /> : <Lock size={15} />}
             Retry payment
           </Button>
-          <Button
-            className="w-full"
-            variant={refundOk ? 'primary' : 'outline'}
-            locked={!refundOk}
-            onClick={() => handleActionClick('REFUND')}
-          >
-            {refundOk ? <CreditCard size={16} /> : <Lock size={15} />}
-            Request refund
-          </Button>
+          {sellerMayDecideRefund && (
+            <Button className="w-full" onClick={() => handleActionClick('REFUND')}>
+              <CreditCard size={16} /> Approve refund
+            </Button>
+          )}
+          {role === 'buyer' && (
+            <Button
+              className="w-full"
+              variant={refundOk ? 'primary' : 'outline'}
+              locked={!refundOk}
+              onClick={() => handleActionClick('REFUND')}
+            >
+              {refundOk ? <CreditCard size={16} /> : <Lock size={15} />}
+              Request refund
+            </Button>
+          )}
+          {sellerMayDecideRefund && (
+            <Button
+              className="w-full"
+              variant="danger"
+              onClick={() => handleActionClick('DENY_REFUND')}
+            >
+              Decline refund request
+            </Button>
+          )}
+          {currentState === 'REFUND_PENDING' && (
+            <p className="rounded-2xl bg-[#FFF4D6] p-3 text-[12.5px] leading-snug text-warning">
+              {waitingForSeller
+                ? 'Refund request is waiting for the seller’s approval. No refund has been sent yet.'
+                : 'The seller approved the refund. PayPal is processing it; this is not confirmed as refunded yet.'}
+            </p>
+          )}
           <Button className="w-full" variant="outline" onClick={() => handleActionClick('RECONCILE')}>
             <RefreshCw size={15} /> Check PayPal again
           </Button>

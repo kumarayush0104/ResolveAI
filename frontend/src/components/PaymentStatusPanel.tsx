@@ -104,7 +104,21 @@ export function PaymentStatusPanel({
                   <div className="min-w-0">
                     <div className="text-[13px] font-bold text-navy">{meta.name}</div>
                     <div className="break-all font-mono text-[10.5px] text-muted">{meta.sub}</div>
-                    {s.detail && <div className="mt-1 text-[11.5px] leading-snug text-muted">{s.detail}</div>}
+                    {s.detail && (
+                      <div className="mt-1 text-[11.5px] leading-snug text-muted">
+                        {s.detail}
+                        {s.availability === 'not_enabled' && (
+                          <a
+                            href="https://developer.paypal.com/dashboard/applications"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 block font-bold text-cyan-deep underline"
+                          >
+                            Open PayPal Developer Dashboard
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-bold ${tone.cls}`}>
                     {tone.icon}

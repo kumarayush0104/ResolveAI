@@ -12,11 +12,14 @@ When a payment looks stuck, ResolveAI pulls authoritative PayPal evidence, build
 
 | Problem | How ResolveAI solves it |
 |---|---|
+| "What does this app do?" | A scroll-led walkthrough introduces the PayPal evidence, safe payment decisions, and buyer/seller flow before opening the interactive demo. |
 | "Did my payment go through?" | Fetches live PayPal order + capture snapshot. Shows exact status with evidence. |
 | Buyers retry a completed payment | Policy engine blocks retries on COMPLETED with rule `R01_COMPLETED_BLOCKS_RETRY` |
 | Network timeout → treated as failure | **Timeouts → UNKNOWN state, never DENIED.** Fails closed. |
 | AI makes things up | AI investigator has read-only tools. Output is validated + re-run through policy engine. If conflict, policy wins. |
 | Stuck pending payments | Async reconciler loop re-fetches every 30s. SSE pushes update to UI live. |
+| Seller-priced orders | Sellers manage catalog items; buyers build a cart and the backend calculates the PayPal order total from current prices. |
+| Refund requests | Buyers request refunds from a case; only a seller can approve or decline before a refund is sent to PayPal. |
 
 ---
 
@@ -122,7 +125,7 @@ Browser (React) ──────────> FastAPI (Python)
                                ├── Gemini AI (google-genai)
                                │     Tool-calling + structured output
                                ├── SQLite / PostgreSQL
-                               │     9 tables, row-level RBAC
+                               │     Catalog, order, and case records
                                └── SSE Event Bus
                                      Live case updates → browser
 ```
@@ -136,6 +139,8 @@ Browser (React) ──────────> FastAPI (Python)
 - **SIMULATION badge.** Every event from the Fault-Injection Lab carries `is_simulated=true` and a visible banner.
 - **Policy engine is authoritative.** AI is advisory. Mismatch is logged and shown in UI.
 - **Idempotency.** `PayPal-Request-Id` on every state-changing POST. Webhook deduplication by `paypal_event_id`.
+- **Refund consent.** A buyer request enters `REFUND_PENDING`; PayPal is called only after seller approval. A denied request returns to `COMPLETED`.
+- **Catalog pricing.** Cart prices are resolved on the server, not trusted from the browser, and copied into the order as a purchase-time snapshot.
 
 ---
 
@@ -159,3 +164,7 @@ After deploying (or running ngrok):
 3. URL: `https://your-app.onrender.com/api/paypal/webhook` (or ngrok URL)
 4. Subscribe to: `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.PENDING`, `PAYMENT.CAPTURE.DENIED`, `PAYMENT.CAPTURE.REFUNDED`, `CHECKOUT.ORDER.APPROVED`
 5. Copy the Webhook ID → add to `.env` as `PAYPAL_WEBHOOK_ID=`
+
+## Enabling Transaction Search
+
+Transaction Search is a PayPal app permission and cannot be enabled from ResolveAI. In the [PayPal Developer Dashboard](https://developer.paypal.com/dashboard/applications), open the app matching `PAYPAL_ENV`, enable **Features → Transaction Search**, then allow time for a fresh access token (PayPal may take up to 9 hours to apply the permission). Until enabled, payment status checks continue to use available Orders and Payments API evidence; a missing Transaction Search result is not treated as a failed payment.

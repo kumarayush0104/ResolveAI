@@ -47,10 +47,18 @@ def evaluate(
         _get_event_type(e) in ("PAYMENT.CAPTURE.REFUNDED", "REFUND_COMPLETED")
         for e in events
     ) or bool(snapshot and getattr(snapshot, "refund_state", None) == "REFUNDED")
-    has_refund_requested = any(
-        _get_event_type(e) in ("REFUND_REQUESTED", "REFUND_PENDING", "PAYMENT.CAPTURE.REFUND.PENDING")
+    refund_progress = [
+        _get_event_type(e)
         for e in events
-    )
+        if _get_event_type(e) in (
+            "REFUND_REQUESTED",
+            "REFUND_SUBMITTED",
+            "REFUND_PENDING",
+            "REFUND_REQUEST_DENIED",
+            "PAYMENT.CAPTURE.REFUND.PENDING",
+        )
+    ]
+    has_refund_requested = bool(refund_progress) and refund_progress[-1] != "REFUND_REQUEST_DENIED"
 
     # 2. Check for active attempts concurrency (R07)
     active_attempts = [

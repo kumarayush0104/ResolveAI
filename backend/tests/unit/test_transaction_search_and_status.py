@@ -85,6 +85,17 @@ async def test_search_not_enabled_is_graceful():
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_search_unauthorized_is_not_mislabeled_as_disabled():
+    tok()
+    respx.get(f"{BASE}/v1/reporting/transactions").mock(
+        return_value=httpx.Response(401, json={"name": "AUTHENTICATION_FAILURE"}))
+    res = await search_transaction(CAP)
+    assert res.availability == "unavailable"
+    assert "access token" in res.note
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_search_timeout_is_unavailable_not_denied():
     tok()
     respx.get(f"{BASE}/v1/reporting/transactions").mock(side_effect=httpx.ReadTimeout("slow"))

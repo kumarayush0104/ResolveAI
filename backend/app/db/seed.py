@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 
 from backend.app.config import settings
-from backend.app.db.models import User
+from backend.app.db.models import Product, User
 
 DEMO_USERS = [
     {
@@ -73,8 +73,30 @@ def seed_users_sync() -> None:
         session.commit()
 
 
+def seed_products_sync() -> None:
+    sync_url = settings.DATABASE_URL
+    if sync_url.startswith("sqlite+aiosqlite://"):
+        sync_url = sync_url.replace("sqlite+aiosqlite://", "sqlite://")
+    sync_connect_args = {}
+    if "sqlite" in sync_url:
+        sync_connect_args["check_same_thread"] = False
+
+    engine = create_engine(sync_url, connect_args=sync_connect_args)
+    with Session(engine) as session:
+        seller = session.query(User).filter_by(email="seller@demo.com").first()
+        if seller and session.query(Product).count() == 0:
+            session.add(Product(
+                seller_id=seller.id,
+                name="ResolveAI demo item",
+                description="Digital goods, instant delivery",
+                price=25.00,
+            ))
+            session.commit()
+
+
 if __name__ == "__main__":
     from backend.app.db.session import init_db_sync
     init_db_sync()
     seed_users_sync()
+    seed_products_sync()
     print("Seed complete.")
