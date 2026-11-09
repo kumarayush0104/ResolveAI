@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CheckCircle2, AlertTriangle, ShoppingBag, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, ShoppingBag, ShieldCheck, Minus, Plus } from 'lucide-react'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { StepTracker } from '../components/StepTracker'
 import { PaymentStatusPanel, StatusReport } from '../components/PaymentStatusPanel'
-import { api, PublicConfig } from '../lib/api'
+import { api, Product, PublicConfig } from '../lib/api'
 import { Card } from '../components/Card'
 import { Button } from '../components/Button'
 import { useToast } from '../components/Toast'
@@ -18,106 +18,167 @@ declare global {
 export function Checkout() {
   const [config, setConfig] = useState<PublicConfig | null>(null)
   const [configFailed, setConfigFailed] = useState(false)
+  const [configFailureMessage, setConfigFailureMessage] = useState('')
   const [orderId, setOrderId] = useState<string | null>(null)
   const [captured, setCaptured] = useState(false)
   const [loading, setLoading] = useState(false)
   const [buttonsRendered, setButtonsRendered] = useState(false)
   const [statusReport, setStatusReport] = useState<StatusReport | null>(null)
   const [checking, setChecking] = useState(false)
+  const [products, setProducts] = useState<Product[]>([])
+  const [cart, setCart] = useState<Record<string, number>>({})
+  const [orderAmount, setOrderAmount] = useState<number | null>(null)
   const buttonsRef = useRef<HTMLDivElement>(null)
+  const cartRef = useRef(cart)
   const nav = useNavigate()
   const { addToast } = useToast()
+  cartRef.current = cart
+
+  const cartItems = products.filter((product) => (cart[product.id] ?? 0) > 0)
+  const cartTotal = cartItems.reduce((sum, product) => sum + product.price * cart[product.id], 0)
+  const amountDue = orderAmount ?? cartTotal
+
+  useEffect(() => {
+    api.getProducts()
+      .then(setProducts)
+      .catch((err) => {
+        console.error('Failed to load product catalog', err)
+        addToast(`Couldn’t load the store items: ${err.message}`, 'warning')
+      })
+  }, [])
 
   useEffect(() => {
     api.getPublicConfig()
-      .then(setConfig)
+      .then((publicConfig) => {
+        setConfig(publicConfig)
+        if (!publicConfig.paypal_client_id) {
+          setConfigFailureMessage('PayPal checkout is not configured. Add PAYPAL_CLIENT_ID to the backend .env file and restart the server.')
+          setConfigFailed(true)
+        }
+      })
       .catch((err) => {
         console.error('Failed to load public config', err)
+        setConfigFailureMessage('Couldn’t load the PayPal settings. Check that the backend is running, then reload.')
         setConfigFailed(true)
         addToast('Couldn’t load the PayPal sandbox settings. Check that the backend is running.', 'warning')
       })
   }, [])
 
   useEffect(() => {
-    if (!config?.paypal_client_id || buttonsRendered) return
+    if (!config?.paypal_client_id || configFailed || buttonsRendered) return
+    let cancelled = false
+    let timeoutId: number | undefined
 
-    const scriptId = 'paypal-js-sdk'
-    if (document.getElementById(scriptId)) {
-      renderButtons()
-      return
-    }
-
-    const script = document.createElement('script')
-    script.id = scriptId
-    script.src = `https://www.paypal.com/sdk/js?client-id=${config.paypal_client_id}&currency=USD&intent=capture`
-    script.async = true
-    script.onload = () => renderButtons()
-    script.onerror = () => {
+    const showError = (message: string) => {
+      if (cancelled) return
+      setConfigFailureMessage(message)
       setConfigFailed(true)
-      addToast('Couldn’t load the PayPal button. Check your internet connection.', 'warning')
+      addToast(message, 'warning')
     }
-    document.body.appendChild(script)
-  }, [config])
 
-  const renderButtons = () => {
-    if (!window.paypal || !buttonsRef.current) return
+    const existing = document.getElementById('paypal-js-sdk') as HTMLScriptElement | null
+    if (window.paypal) {
+      void renderButtons().catch((err) => {
+        console.error('Failed to render PayPal buttons', err)
+        showError('PayPal couldn’t display the payment button. Reload the page and try again.')
+      })
+    } else {
+      const script = existing ?? document.createElement('script')
+      script.id = 'paypal-js-sdk'
+      script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(config.paypal_client_id)}&currency=USD&intent=capture`
+      script.async = true
 
-    try {
-      buttonsRef.current.innerHTML = ''
-      window.paypal
-        .Buttons({
-          createOrder: async () => {
-            setLoading(true)
-            try {
-              const res = await api.createOrder(25.0, 'USD')
-              setOrderId(res.order_id)
-              return res.order_id
-            } catch (err: any) {
-              addToast(`Couldn’t create the order: ${err.message}`, 'warning')
-              throw err
-            } finally {
-              setLoading(false)
-            }
-          },
-          onApprove: async (data: any) => {
-            setLoading(true)
-            try {
-              const res = await api.captureOrder(data.orderID)
-              setOrderId(data.orderID)
-              if (res.status === 'COMPLETED') {
-                setCaptured(true)
-                addToast(
-                  res.recovered
-                    ? 'The confirmation was lost, but PayPal confirms your payment went through. You will not be charged again.'
-                    : 'Payment captured in the PayPal sandbox.',
-                  'success',
-                )
-              } else if (res.status === 'PENDING') {
-                addToast('PayPal reports the payment as pending. Please do not pay again.', 'info')
-              } else {
-                // UNKNOWN: we could not confirm the outcome. Never tell the buyer it failed.
-                addToast(res.message || 'We could not confirm the result yet. Do not pay again. Open a case and we will check PayPal.', 'warning')
-              }
-            } catch (err: any) {
-              addToast(`Capture failed or timed out: ${err.message}`, 'warning')
-              // Keep the order ID so a case can still be opened
-              setOrderId(data.orderID)
-            } finally {
-              setLoading(false)
-            }
-          },
-          onError: (err: any) => {
-            console.error('PayPal Smart Buttons error:', err)
-            addToast('The PayPal payment was canceled or hit an error.', 'info')
-          },
-          style: { shape: 'pill', color: 'gold', layout: 'vertical', label: 'paypal' },
+      const onLoad = () => {
+        window.clearTimeout(timeoutId)
+        if (cancelled) return
+        if (!window.paypal) {
+          showError('PayPal’s checkout library loaded without its button API. Check the client ID and try again.')
+          return
+        }
+        void renderButtons().catch((err) => {
+          console.error('Failed to render PayPal buttons', err)
+          showError('PayPal couldn’t display the payment button. Reload the page and try again.')
         })
-        .render(buttonsRef.current)
+      }
+      const onError = () => {
+        window.clearTimeout(timeoutId)
+        showError('Couldn’t load PayPal checkout. Check your connection and sandbox client ID, then reload.')
+      }
 
-      setButtonsRendered(true)
-    } catch (e) {
-      console.error('Error rendering PayPal buttons:', e)
+      script.addEventListener('load', onLoad, { once: true })
+      script.addEventListener('error', onError, { once: true })
+      timeoutId = window.setTimeout(() => {
+        showError('PayPal checkout took too long to load. Check your connection and reload the page.')
+      }, 15000)
+
+      if (!existing) document.body.appendChild(script)
     }
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [config, configFailed, buttonsRendered])
+
+  const renderButtons = async () => {
+    if (!window.paypal || !buttonsRef.current) {
+      throw new Error('PayPal SDK is unavailable')
+    }
+
+    buttonsRef.current.innerHTML = ''
+    const buttons = window.paypal.Buttons({
+      createOrder: async () => {
+        setLoading(true)
+        try {
+          const items = cartRef.current
+          if (!Object.keys(items).length) throw new Error('Add an item to your cart first.')
+          const res = await api.createOrder(
+            Object.entries(items).map(([product_id, quantity]) => ({ product_id, quantity })),
+          )
+          setOrderId(res.order_id)
+          setOrderAmount(res.amount)
+          return res.order_id
+        } catch (err: any) {
+          addToast(`Couldn’t create the order: ${err.message}`, 'warning')
+          throw err
+        } finally {
+          setLoading(false)
+        }
+      },
+      onApprove: async (data: any) => {
+        setLoading(true)
+        try {
+          const res = await api.captureOrder(data.orderID)
+          setOrderId(data.orderID)
+          if (res.status === 'COMPLETED') {
+            setCaptured(true)
+            addToast(
+              res.recovered
+                ? 'The confirmation was lost, but PayPal confirms your payment went through. You will not be charged again.'
+                : 'Payment captured in the PayPal sandbox.',
+              'success',
+            )
+          } else if (res.status === 'PENDING') {
+            addToast('PayPal reports the payment as pending. Please do not pay again.', 'info')
+          } else {
+            addToast(res.message || 'We could not confirm the result yet. Do not pay again. Open a case and we will check PayPal.', 'warning')
+          }
+        } catch (err: any) {
+          addToast(`Capture failed or timed out: ${err.message}`, 'warning')
+          setOrderId(data.orderID)
+        } finally {
+          setLoading(false)
+        }
+      },
+      onError: (err: any) => {
+        console.error('PayPal Smart Buttons error:', err)
+        addToast('The PayPal payment was canceled or hit an error.', 'info')
+      },
+      style: { shape: 'pill', color: 'gold', layout: 'vertical', label: 'paypal' },
+    })
+
+    await buttons.render(buttonsRef.current)
+    setButtonsRendered(true)
   }
 
   const checkStatus = async () => {
@@ -160,22 +221,90 @@ export function Checkout() {
       />
       <StepTracker steps={['Create order', 'Approve & pay', 'Confirm']} current={captured ? 2 : orderId ? 1 : 0} />
 
-      {/* Amount card, in the style of a send-money screen */}
+      <Card className="space-y-3 !p-5">
+        <h2 className="text-[15px] font-extrabold text-navy">Store items</h2>
+        {products.length === 0 ? (
+          <p className="rounded-2xl bg-mist p-3 text-[12.5px] text-muted">The seller hasn’t listed any items yet.</p>
+        ) : products.map((product) => (
+          <div key={product.id} className="flex items-center gap-3 rounded-2xl border border-line p-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-cyan-soft text-cyan-deep">
+              <ShoppingBag size={20} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-bold text-navy">{product.name}</span>
+              <span className="block truncate text-[11.5px] text-muted">{product.description}</span>
+              <span className="mt-0.5 block text-[12px] font-bold text-cyan-deep">${product.price.toFixed(2)}</span>
+            </span>
+            <Button
+              variant="outline"
+              disabled={Boolean(orderId) || (cart[product.id] ?? 0) >= 99}
+              onClick={() => setCart((current) => ({
+                ...current,
+                [product.id]: Math.min(99, (current[product.id] ?? 0) + 1),
+              }))}
+            >
+              <Plus size={15} /> Add
+            </Button>
+          </div>
+        ))}
+      </Card>
+
+      {/* Cart and the server-priced order total */}
       <Card className="!p-5">
         <div className="flex items-center gap-3">
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan-soft text-cyan-deep">
             <ShoppingBag size={22} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[15px] font-bold text-navy">ResolveAI demo item</p>
-            <p className="text-[12.5px] text-muted">Digital goods, instant delivery</p>
+            <p className="truncate text-[15px] font-bold text-navy">Your cart</p>
+            <p className="text-[12.5px] text-muted">Seller-set prices · USD</p>
           </div>
         </div>
 
+        {cartItems.length ? (
+          <ul className="mt-4 space-y-2">
+            {cartItems.map((product) => (
+              <li key={product.id} className="flex items-center gap-2 rounded-xl bg-mist px-3 py-2">
+                <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-navy">{product.name}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove one ${product.name}`}
+                  disabled={Boolean(orderId)}
+                  onClick={() => setCart((current) => {
+                    const quantity = (current[product.id] ?? 0) - 1
+                    const next = { ...current }
+                    if (quantity > 0) next[product.id] = quantity
+                    else delete next[product.id]
+                    return next
+                  })}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-navy disabled:opacity-50"
+                >
+                  <Minus size={13} />
+                </button>
+                <span className="w-5 text-center text-[12px] font-bold tabular-nums">{cart[product.id]}</span>
+                <button
+                  type="button"
+                  aria-label={`Add one ${product.name}`}
+                  disabled={Boolean(orderId) || cart[product.id] >= 99}
+                  onClick={() => setCart((current) => ({ ...current, [product.id]: current[product.id] + 1 }))}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-navy disabled:opacity-50"
+                >
+                  <Plus size={13} />
+                </button>
+                <span className="w-16 text-right text-[12px] font-bold tabular-nums text-navy">
+                  ${(product.price * cart[product.id]).toFixed(2)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-4 rounded-2xl bg-mist p-3 text-[12.5px] text-muted">Add a store item to start your cart.</p>
+        )}
+
         <div className="my-6 text-center">
-          <p className="text-[13px] font-semibold text-muted">Amount</p>
+          <p className="text-[13px] font-semibold text-muted">{orderId ? 'Final price' : 'Cart total'}</p>
           <p className="mt-1 text-[52px] font-extrabold leading-none tracking-[-0.04em] text-navy tabular-nums">
-            $25.00
+            ${amountDue.toFixed(2)}
           </p>
           <span className="mt-2 inline-block rounded-full bg-mist px-3 py-1 text-[12px] font-bold text-cyan-deep">USD</span>
         </div>
@@ -207,7 +336,7 @@ export function Checkout() {
           )}
           {configFailed && !buttonsRendered && (
             <p className="rounded-2xl bg-[#FFF4D6] p-3 text-[12.5px] font-medium leading-snug text-warning">
-              The PayPal button isn’t available right now. Check the backend and your connection, then reload.
+              {configFailureMessage || 'The PayPal button isn’t available right now. Check the backend and your connection, then reload.'}
             </p>
           )}
           {/* The PayPal SDK renders into this div directly */}

@@ -58,7 +58,34 @@ class Order(Base):
 
     user = relationship("User", back_populates="orders")
     payment_attempts = relationship("PaymentAttempt", back_populates="order", cascade="all, delete-orphan")
+    items = relationship("OrderLineItem", back_populates="order", cascade="all, delete-orphan")
     case = relationship("Case", back_populates="order", uselist=False, cascade="all, delete-orphan")
+
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    seller_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    price: Mapped[float] = mapped_column(Float, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class OrderLineItem(Base):
+    __tablename__ = "order_line_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    order_id: Mapped[str] = mapped_column(String(36), ForeignKey("orders.id"), nullable=False, index=True)
+    product_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("products.id"), nullable=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    quantity: Mapped[int] = mapped_column(nullable=False)
+    unit_price: Mapped[float] = mapped_column(Float, nullable=False)
+
+    order = relationship("Order", back_populates="items")
 
 
 class PaymentAttempt(Base):

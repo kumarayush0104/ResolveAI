@@ -15,7 +15,7 @@ from backend.app.security.auth import get_current_user
 from backend.app.security.permissions import require_case_access, require_order_access
 from backend.app.policy.engine import evaluate
 from backend.app.paypal.orders import get_order, get_capture, refund_capture
-from backend.app.paypal.client import ProviderSnapshot
+from backend.app.paypal.client import PayPalError, PayPalTimeout, ProviderSnapshot
 from backend.app.services.status_check import check_payment_status
 from backend.app.services.reconciliation import reconcile_case
 from backend.app.services.investigation import run_case_investigation
@@ -412,8 +412,60 @@ async def approve_case_action(
     require_case_access(case, current_user)
 
     action_upper = action.upper()
+    refund_events = []
+    if action_upper in ("REFUND", "DENY_REFUND"):
+        refund_events = (await session.execute(
+            select(CaseEvent)
+            .where(
+                CaseEvent.case_id == case.id,
+                CaseEvent.event_type.in_(("REFUND_REQUESTED", "REFUND_SUBMITTED", "REFUND_REQUEST_DENIED")),
+            )
+            .order_by(CaseEvent.created_at, CaseEvent.id)
+        )).scalars().all()
+    awaiting_seller = bool(refund_events and refund_events[-1].event_type == "REFUND_REQUESTED")
+
+    if action_upper == "REFUND" and current_user.role == "buyer":
+        if "REFUND" not in case.permitted_actions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Refund request is not currently permitted. Permitted: {case.permitted_actions}",
+            )
+        request_event = CaseEvent(
+            case_id=case.id,
+            source="USER",
+            event_type="REFUND_REQUESTED",
+            description=f"Refund of {case.order.amount} {case.order.currency} requested by buyer. Waiting for seller approval.",
+        )
+        session.add(request_event)
+        case.current_policy_state = "REFUND_PENDING"
+        case.status = "REFUND_PENDING"
+        case.permitted_actions = ["RECONCILE"]
+        await session.commit()
+        await session.refresh(case)
+        await event_bus.broadcast(case.id, {
+            "type": "action_approved",
+            "action": "REFUND_REQUESTED",
+            "case_id": case.id,
+            "state": case.current_policy_state,
+        })
+        return {
+            "case_id": case.id,
+            "action": "REFUND_REQUESTED",
+            "state": case.current_policy_state,
+            "permitted_actions": case.permitted_actions,
+        }
+
+    if action_upper in ("REFUND", "DENY_REFUND") and current_user.role not in ("seller", "admin"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the seller can decide a refund request")
+    if action_upper in ("REFUND", "DENY_REFUND") and not awaiting_seller:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "There is no refund request awaiting seller approval")
+
     # RECONCILE only reads PayPal, so it is allowed in every state. Everything else is policy-gated.
-    if action_upper != "RECONCILE" and action_upper not in case.permitted_actions:
+    if (
+        action_upper not in ("RECONCILE", "DENY_REFUND")
+        and not (action_upper == "REFUND" and awaiting_seller)
+        and action_upper not in case.permitted_actions
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Action '{action_upper}' is not currently permitted by policy engine. Permitted: {case.permitted_actions}",
@@ -461,7 +513,7 @@ async def approve_case_action(
             raise HTTPException(status_code=400, detail="Cannot refund: No valid capture ID found.")
 
         # Execute refund on PayPal
-        req_id = f"ref-{uuid.uuid4().hex[:12]}"
+        req_id = f"refund-{refund_events[-1].id}"
         try:
             refund_res = await refund_capture(
                 capture_id=capture_id,
@@ -469,7 +521,7 @@ async def approve_case_action(
                 currency=case.order.currency,
                 request_id=req_id,
             )
-        except Exception as exc:
+        except (PayPalError, PayPalTimeout) as exc:
             raise HTTPException(status_code=502, detail=f"PayPal refund call failed: {exc}")
 
         # Update case state to REFUND_PENDING (R09: refund requested != completed)
@@ -480,10 +532,24 @@ async def approve_case_action(
         event = CaseEvent(
             case_id=case.id,
             source="POLICY",
-            event_type="REFUND_REQUESTED",
-            description=f"Refund of {case.order.amount} {case.order.currency} submitted to PayPal. Status: REFUND_PENDING.",
+            event_type="REFUND_SUBMITTED",
+            description=(
+                f"Seller approved the refund and submitted {case.order.amount} {case.order.currency} to PayPal. "
+                f"PayPal response: {refund_res.get('status', 'UNKNOWN')}. Status: REFUND_PENDING."
+            ),
         )
         session.add(event)
+
+    elif action_upper == "DENY_REFUND":
+        case.current_policy_state = "COMPLETED"
+        case.status = "COMPLETED"
+        case.permitted_actions = ["REFUND", "VIEW_DETAILS"]
+        session.add(CaseEvent(
+            case_id=case.id,
+            source="USER",
+            event_type="REFUND_REQUEST_DENIED",
+            description=f"Seller declined the buyer's refund request. {payload.notes or ''}".strip(),
+        ))
 
     elif action_upper == "ALLOW_RETRY":
         case.current_policy_state = "RETRY_ALLOWED"

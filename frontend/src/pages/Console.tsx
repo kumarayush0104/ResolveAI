@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { useNavigate } from 'react-router-dom'
-import { ShieldCheck, Ban, Timer, FileCheck2, ChevronRight, Inbox } from 'lucide-react'
-import { api } from '../lib/api'
+import { ShieldCheck, Ban, Timer, FileCheck2, ChevronRight, Inbox, Plus, Pencil } from 'lucide-react'
+import { api, Product } from '../lib/api'
 import { Card } from '../components/Card'
 import { Button } from '../components/Button'
 import { StatusBadge } from '../components/StatusBadge'
+import { useAuth } from '../lib/auth'
+import { useToast } from '../components/Toast'
 
 function useCountUp(target: number, duration = 1000) {
   const [val, setVal] = useState(0)
@@ -41,7 +43,15 @@ const pieData = [
 export function Console() {
   const [metrics, setMetrics] = useState<any>(null)
   const [cases, setCases] = useState<any[]>([])
+  const [products, setProducts] = useState<Product[]>([])
+  const [editingProduct, setEditingProduct] = useState<string | null>(null)
+  const [productName, setProductName] = useState('')
+  const [productDescription, setProductDescription] = useState('')
+  const [productPrice, setProductPrice] = useState('')
+  const [savingProduct, setSavingProduct] = useState(false)
   const nav = useNavigate()
+  const { role } = useAuth()
+  const { addToast } = useToast()
 
   useEffect(() => {
     api.getMetrics()
@@ -54,6 +64,44 @@ export function Console() {
         setMetrics({ total_cases: 12, duplicates_blocked: 8, avg_resolution_seconds: 42, evidence_coverage_pct: 99 })
       })
   }, [])
+
+  useEffect(() => {
+    api.getProducts()
+      .then(setProducts)
+      .catch((err) => {
+        console.error('Failed to load seller catalog', err)
+        addToast(`Couldn’t load the item list: ${err.message}`, 'warning')
+      })
+  }, [])
+
+  const saveProduct = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const price = Number(productPrice)
+    if (!productName.trim() || !Number.isFinite(price) || price <= 0) {
+      addToast('Enter an item name and a valid price.', 'warning')
+      return
+    }
+
+    setSavingProduct(true)
+    try {
+      const payload = { name: productName.trim(), description: productDescription.trim(), price }
+      const saved = editingProduct
+        ? await api.updateProduct(editingProduct, payload)
+        : await api.createProduct(payload)
+      setProducts((current) => editingProduct
+        ? current.map((item) => item.id === saved.id ? saved : item)
+        : [...current, saved])
+      setEditingProduct(null)
+      setProductName('')
+      setProductDescription('')
+      setProductPrice('')
+      addToast(editingProduct ? 'Item and price updated.' : 'Item added to the store.', 'success')
+    } catch (err: any) {
+      addToast(`Couldn’t save the item: ${err.message}`, 'warning')
+    } finally {
+      setSavingProduct(false)
+    }
+  }
 
   const total = useCountUp(metrics?.total_cases ?? 14)
   const blocked = useCountUp(metrics?.duplicates_blocked ?? 9)
@@ -135,6 +183,94 @@ export function Console() {
           </li>
         ))}
       </ul>
+
+      {role !== 'buyer' && (
+        <section>
+          <div className="mb-2.5 flex items-baseline justify-between px-1">
+            <h2 className="text-[17px] font-extrabold tracking-tight text-navy">Store items & prices</h2>
+          </div>
+          <Card className="space-y-3">
+            {products.length === 0 ? (
+              <p className="text-[12.5px] text-muted">No items yet. Add the first item for buyers.</p>
+            ) : (
+              <ul className="space-y-2">
+                {products.map((product) => (
+                  <li key={product.id} className="flex items-center gap-3 rounded-2xl bg-mist p-3">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-bold text-navy">{product.name}</span>
+                      <span className="block truncate text-[11.5px] text-muted">{product.description}</span>
+                    </span>
+                    <span className="text-[13px] font-extrabold tabular-nums text-navy">${product.price.toFixed(2)}</span>
+                    <button
+                      type="button"
+                      aria-label={`Edit ${product.name}`}
+                      onClick={() => {
+                        setEditingProduct(product.id)
+                        setProductName(product.name)
+                        setProductDescription(product.description)
+                        setProductPrice(product.price.toFixed(2))
+                      }}
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-cyan-deep"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form onSubmit={saveProduct} className="space-y-2.5 border-t border-line pt-3">
+              <h3 className="text-[13px] font-bold text-navy">{editingProduct ? 'Change item or price' : 'Add an item'}</h3>
+              <input
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+                maxLength={120}
+                placeholder="Item name"
+                required
+                className="w-full rounded-xl border border-line bg-white px-3 py-2.5 text-[13px] text-navy outline-none focus:border-cyan"
+              />
+              <input
+                value={productDescription}
+                onChange={(e) => setProductDescription(e.target.value)}
+                maxLength={500}
+                placeholder="Short description"
+                className="w-full rounded-xl border border-line bg-white px-3 py-2.5 text-[13px] text-navy outline-none focus:border-cyan"
+              />
+              <label className="block text-[12px] font-semibold text-muted">
+                Price (USD)
+                <input
+                  type="number"
+                  min="0.01"
+                  max="100000"
+                  step="0.01"
+                  value={productPrice}
+                  onChange={(e) => setProductPrice(e.target.value)}
+                  required
+                  className="mt-1 w-full rounded-xl border border-line bg-white px-3 py-2.5 text-[13px] text-navy outline-none focus:border-cyan"
+                />
+              </label>
+              <div className="flex gap-2">
+                <Button type="submit" className="flex-1" loading={savingProduct}>
+                  <Plus size={15} /> {editingProduct ? 'Save changes' : 'Add item'}
+                </Button>
+                {editingProduct && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingProduct(null)
+                      setProductName('')
+                      setProductDescription('')
+                      setProductPrice('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </form>
+          </Card>
+        </section>
+      )}
 
       {/* Volume chart */}
       <Card>

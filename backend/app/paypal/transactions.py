@@ -204,7 +204,7 @@ async def search_transaction(
             note="Transaction Search timed out. Outcome not established.",
         )
     except PayPalError as exc:
-        if exc.status_code in (401, 403):
+        if exc.status_code == 403:
             return TransactionSearchResult(
                 availability=NOT_ENABLED,
                 transaction_id=transaction_id,
@@ -213,6 +213,12 @@ async def search_transaction(
                     "turn on Features > Transaction Search, then wait for a fresh access token "
                     "(it can take up to 9 hours)."
                 ),
+            )
+        if exc.status_code == 401:
+            return TransactionSearchResult(
+                availability=UNAVAILABLE,
+                transaction_id=transaction_id,
+                note="PayPal rejected the access token. Check the configured app credentials and request a fresh token.",
             )
         logger.warning("Transaction Search error %s: %s", exc.status_code, exc.message)
         return TransactionSearchResult(

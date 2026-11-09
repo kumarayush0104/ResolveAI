@@ -27,6 +27,14 @@ export interface PublicConfig {
   enable_lab: boolean
 }
 
+export interface Product {
+  id: string
+  name: string
+  description: string
+  price: number
+  active: boolean
+}
+
 export const api = {
   // Auth
   demoLogin: (role: string) => req<{ access_token: string; role: string }>('POST', '/auth/demo-login', { role }),
@@ -35,8 +43,8 @@ export const api = {
   getPublicConfig: () => req<PublicConfig>('GET', '/config/public'),
 
   // Orders
-  createOrder: (amount: number, currency: string) =>
-    req<{ order_id: string; approval_url: string; status: string }>('POST', '/orders', { amount, currency }),
+  createOrder: (items: { product_id: string; quantity: number }[]) =>
+    req<{ order_id: string; approval_url: string; status: string; amount: number }>('POST', '/orders', { items }),
   getOrder: (id: string) => req<any>('GET', `/orders/${id}`),
   captureOrder: (id: string) => req<any>('POST', `/orders/${id}/capture`),
   // Ask PayPal three ways (Orders API, Payments API, Transaction Search). Read-only.
@@ -46,6 +54,13 @@ export const api = {
   // Merchant roles only.
   lookupTransaction: (transactionId: string, daysBack = 30) =>
     req<any>('GET', `/paypal/transactions/${transactionId}?days_back=${daysBack}`),
+
+  // Seller catalog
+  getProducts: () => req<Product[]>('GET', '/catalog/items'),
+  createProduct: (product: Pick<Product, 'name' | 'description' | 'price'>) =>
+    req<Product>('POST', '/catalog/items', product),
+  updateProduct: (id: string, product: Pick<Product, 'name' | 'description' | 'price'>) =>
+    req<Product>('PATCH', `/catalog/items/${id}`, product),
 
   // Cases
   createCase: (order_id: string) => req<any>('POST', '/cases', { order_id }),

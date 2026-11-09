@@ -10,8 +10,14 @@
 | `COMPLETED` | PayPal confirmed capture successful | Yes |
 | `DENIED` | PayPal explicitly denied or declined | Near-terminal |
 | `RETRY_ALLOWED` | After human approval on DENIED state | Transitional |
-| `REFUND_PENDING` | Refund requested (not yet confirmed) | No |
+| `REFUND_PENDING` | Buyer requested a refund; awaiting seller approval or PayPal confirmation | No |
 | `REFUNDED` | Refund confirmed via `PAYMENT.CAPTURE.REFUNDED` webhook | Yes |
+
+## Refund approval
+
+1. A buyer can request a refund only for a policy-eligible completed payment.
+2. The case moves to `REFUND_PENDING`; no PayPal refund is sent yet.
+3. A seller can approve or decline the request. Approval submits the refund to PayPal; the case remains `REFUND_PENDING` until PayPal confirms the result. A decline returns the case to `COMPLETED`.
 
 ## Core Invariant
 
