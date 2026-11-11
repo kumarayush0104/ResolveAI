@@ -15,6 +15,27 @@ declare global {
   }
 }
 
+
+/**
+ * Isolated container for the PayPal Smart Buttons iframe.
+ * React.memo with a stable key (amount+currency string) prevents the iframe
+ * from flickering when parent SSE-driven state updates arrive.
+ */
+const PayPalButtonContainer = React.memo(function PayPalButtonContainer({
+  containerRef,
+  hidden,
+}: {
+  containerRef: React.RefObject<HTMLDivElement>
+  hidden: boolean
+}) {
+  return (
+    <div
+      ref={containerRef}
+      id="paypal-button-container"
+      className={hidden ? 'hidden' : 'min-h-[140px]'}
+    />
+  )
+})
 export function Checkout() {
   const [config, setConfig] = useState<PublicConfig | null>(null)
   const [configFailed, setConfigFailed] = useState(false)
@@ -340,7 +361,7 @@ export function Checkout() {
             </p>
           )}
           {/* The PayPal SDK renders into this div directly */}
-          <div ref={buttonsRef} id="paypal-button-container" className={buttonsRendered ? 'min-h-[140px]' : 'hidden'} />
+          <PayPalButtonContainer containerRef={buttonsRef} hidden={!buttonsRendered} />
 
           {orderId && (
             <div className="border-t border-line pt-3">

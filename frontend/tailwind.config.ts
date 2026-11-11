@@ -35,11 +35,19 @@ export default {
         mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       borderRadius: {
-        card: '20px',
+        // Unified radius scale
+        control: '16px',  // inputs, chips, small buttons
+        card:    '20px',  // standard cards
+        hero:    '28px',  // hero sections, wallet cards
       },
       boxShadow: {
-        card: '0 1px 2px rgba(10,42,102,.04), 0 6px 20px rgba(10,42,102,.07)',
-        phone: '0 40px 80px -20px rgba(10,42,102,.35), 0 12px 30px rgba(10,42,102,.18)',
+        // Layered, soft — not harsh
+        card:       '0 1px 2px rgba(10,42,102,.04), 0 6px 20px rgba(10,42,102,.07)',
+        'card-hover':'0 4px 12px rgba(10,42,102,.08), 0 12px 32px rgba(10,42,102,.12)',
+        phone:      '0 48px 96px -16px rgba(10,42,102,.50), 0 16px 36px -8px rgba(0,0,0,.28), inset 0 1.5px 0 rgba(255,255,255,.15)',
+        glass:      '0 8px 32px rgba(10,42,102,.10), inset 0 1px 0 rgba(255,255,255,.90)',
+        glow:       '0 0 20px rgba(3,150,216,.35)',
+        'glow-gold':'0 0 20px rgba(255,196,57,.40)',
       },
     },
   },

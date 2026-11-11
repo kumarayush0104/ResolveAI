@@ -1,9 +1,27 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { motion, useReducedMotion, useScroll, useTransform, type MotionValue } from 'framer-motion'
+import {
+  motion,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+  useSpring,
+  useMotionValueEvent,
+  type MotionValue,
+} from 'framer-motion'
 import { ArrowDown, Check, CircleHelp, Search, ShieldCheck, ShoppingBag, Store } from 'lucide-react'
 import { PhoneFrame } from '../components/PhoneFrame'
 import { ThreePayPalLogo } from '../components/ThreePayPalLogo'
+
+/** Left accent colors by card theme */
+const ACCENT: Record<string, string> = {
+  search:    '#0396D8',
+  store:     '#0A2A66',
+  shield:    '#1F8A4C',
+  check:     '#FFC439',
+  shopping:  '#0396D8',
+  help:      '#B26A00',
+}
 
 function FloatingCard({
   className,
@@ -13,6 +31,7 @@ function FloatingCard({
   title,
   description,
   icon,
+  accentKey,
 }: {
   className: string
   progress: MotionValue<number>
@@ -21,22 +40,82 @@ function FloatingCard({
   title: string
   description: string
   icon: React.ReactNode
+  accentKey: string
 }) {
-  const opacity = useTransform(progress, [reveal[0], reveal[1], disappear[0], disappear[1]], [0, 1, 1, 0])
-  const scale = useTransform(progress, [reveal[0], reveal[1], disappear[0], disappear[1]], [0.9, 1, 1, 0.94])
-  const rotate = useTransform(progress, [reveal[0], reveal[1], disappear[0]], [-5, 0, 2])
-  const y = useTransform(progress, [reveal[0], reveal[1], disappear[0]], [32, 0, -14])
+  const reduceMotion = useReducedMotion() ?? false
+
+  // Conditional mounting: unmounts card completely when outside its active scroll range
+  // eliminating any ghost layers or text bleed-through from overlapping cards
+  const [inRange, setInRange] = useState(() => {
+    const v = progress.get()
+    return v >= reveal[0] - 0.02 && v <= disappear[1] + 0.02
+  })
+
+  useMotionValueEvent(progress, 'change', (v) => {
+    const shouldBeActive = v >= reveal[0] - 0.02 && v <= disappear[1] + 0.02
+    setInRange(shouldBeActive)
+  })
+
+  // Clean fade from 0 -> 1 -> 1 -> 0 with no residual opacity
+  const opacity = useTransform(
+    progress,
+    [reveal[0], reveal[1], disappear[0], disappear[1]],
+    [0, 1, 1, 0],
+  )
+  const scale = useTransform(
+    progress,
+    [reveal[0], reveal[1], disappear[0], disappear[1]],
+    reduceMotion ? [1, 1, 1, 1] : [0.92, 1, 1, 0.95],
+  )
+  const rotate = useTransform(
+    progress,
+    [reveal[0], reveal[1], disappear[0]],
+    reduceMotion ? [0, 0, 0] : [-4, 0, 1.5],
+  )
+  const y = useTransform(
+    progress,
+    [reveal[0], reveal[1], disappear[0], disappear[1]],
+    reduceMotion ? [0, 0, 0, 0] : [36, 0, -6, -20],
+  )
+
+  // Subtle 3D tilt springs
+  const rotateX = useSpring(
+    useTransform(progress, [reveal[0], reveal[1], disappear[0]], reduceMotion ? [0, 0, 0] : [3, 0, -1]),
+    { stiffness: 120, damping: 28 },
+  )
+
+  // Unmount completely when outside active scroll range
+  if (!inRange) {
+    return null
+  }
+
+  const accent = ACCENT[accentKey] ?? '#0396D8'
 
   return (
     <motion.article
-      className={`story-feature-card ${className}`}
-      style={{ opacity, scale, rotate, x: '-50%', y }}
+      className={`story-feature-card flex flex-col justify-between ${className}`}
+      style={{ opacity, scale, rotate, rotateX, x: '-50%', y }}
     >
-      <span className="story-feature-icon">{icon}</span>
-      <span className="story-feature-kicker">RESOLVEAI · PAYMENT RECOVERY</span>
-      <h2>{title}</h2>
-      <p>{description}</p>
-      <span className="story-feature-proof"><Check size={14} /> PayPal evidence first</span>
+      {/* Left color accent stripe — inset from corners to eliminate border clipping */}
+      <span
+        className="pointer-events-none absolute left-0 top-6 bottom-6 w-1 rounded-r-full"
+        style={{ background: accent }}
+        aria-hidden
+      />
+
+      <div className="flex flex-col flex-1">
+        <span className="story-feature-icon" style={{ background: `${accent}18`, color: accent }}>
+          {icon}
+        </span>
+        <span className="story-feature-kicker" style={{ color: accent }}>RESOLVEAI · PAYMENT RECOVERY</span>
+        <h2>{title}</h2>
+        <p className="flex-1">{description}</p>
+      </div>
+
+      {/* Pinned bottom baseline across all cards regardless of text length */}
+      <div className="story-feature-proof mt-auto pt-4">
+        <Check size={14} /> PayPal evidence first
+      </div>
     </motion.article>
   )
 }
@@ -54,8 +133,13 @@ export function ScrollStory({ children }: { children: React.ReactNode }) {
     target: demoRef,
     offset: ['start end', 'start start'],
   })
+
+  // Smoother spring on scroll-linked values
+  const smoothScroll = useSpring(scrollYProgress, { stiffness: 80, damping: 25 })
+  const activeProgress = reduceMotion ? scrollYProgress : smoothScroll
+
   const demoOpacity = useTransform(demoProgress, [0, 1], [0, 1])
-  const demoY = useTransform(demoProgress, [0, 1], [20, 0])
+  const demoY = useTransform(demoProgress, [0, 1], [24, 0])
   const demoScale = useTransform(demoProgress, [0, 1], [0.97, 1])
   const stepsOpacity = useTransform(demoProgress, [0.05, 0.45], [0, 1])
   const stepsY = useTransform(demoProgress, [0.05, 0.45], [24, 0])
@@ -73,69 +157,81 @@ export function ScrollStory({ children }: { children: React.ReactNode }) {
     <main className="story-page min-h-screen overflow-x-clip bg-[#F5F9FC] text-navy">
       <section ref={storyRef} className="story-scroll-track relative">
         <div className="story-scroll-stage sticky top-0 flex h-[100svh] items-center justify-center">
+          {/* Soft floating orb backdrops */}
           <div className="story-backdrop story-backdrop-one" aria-hidden />
           <div className="story-backdrop story-backdrop-two" aria-hidden />
-          <ThreePayPalLogo scrollProgress={scrollYProgress} />
+          <ThreePayPalLogo scrollProgress={activeProgress} />
 
+          {/* Batch 1 — reveals 14–44% */}
           <FloatingCard
             className="story-feature-card-left"
-            progress={scrollYProgress}
+            progress={activeProgress}
             reveal={[0.14, 0.2]}
             disappear={[0.37, 0.44]}
             icon={<Search size={22} />}
+            accentKey="search"
             title="Know what happened."
             description="Check PayPal transaction records before anyone tries the payment again."
           />
           <FloatingCard
             className="story-feature-card-top"
-            progress={scrollYProgress}
+            progress={activeProgress}
             reveal={[0.14, 0.2]}
             disappear={[0.37, 0.44]}
             icon={<Store size={22} />}
+            accentKey="store"
             title="Seller-managed offers."
             description="Sellers add items and update prices; buyers always see the current offer."
           />
           <FloatingCard
             className="story-feature-card-main"
-            progress={scrollYProgress}
+            progress={activeProgress}
             reveal={[0.14, 0.2]}
             disappear={[0.37, 0.44]}
             icon={<ShieldCheck size={23} />}
+            accentKey="shield"
             title="Never pay twice."
             description="ResolveAI checks the payment evidence before it allows a retry."
           />
+
+          {/* Batch 2 — reveals 48–78% */}
           <FloatingCard
             className="story-feature-card-right"
-            progress={scrollYProgress}
+            progress={activeProgress}
             reveal={[0.48, 0.54]}
             disappear={[0.72, 0.78]}
             icon={<Check size={22} />}
+            accentKey="check"
             title="Refunds need both sides."
             description="A refund request goes to the seller for approval before it is sent."
           />
           <FloatingCard
             className="story-feature-card-lower-left"
-            progress={scrollYProgress}
+            progress={activeProgress}
             reveal={[0.48, 0.54]}
             disappear={[0.72, 0.78]}
             icon={<ShoppingBag size={22} />}
+            accentKey="shopping"
             title="See the final total."
             description="Buyers add seller-listed items to a cart, review the price, then check out."
           />
           <FloatingCard
             className="story-feature-card-lower-right"
-            progress={scrollYProgress}
+            progress={activeProgress}
             reveal={[0.48, 0.54]}
             disappear={[0.72, 0.78]}
             icon={<CircleHelp size={22} />}
+            accentKey="help"
             title="Open a case when stuck."
             description="Bring the buyer and seller into one place to review the issue and its evidence."
           />
 
+          {/* Scroll hint — fades out as user scrolls */}
           <motion.div className="story-scroll-hint" style={{ opacity: hintOpacity }}>
             Scroll to explore <ArrowDown size={16} />
           </motion.div>
 
+          {/* Progress bar */}
           <span className="story-scroll-progress" aria-hidden>
             SCROLL TO EXPLORE <motion.span style={{ scaleX: scrollYProgress }} />
           </span>

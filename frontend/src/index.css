@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -22,7 +22,7 @@
     #F6FAFD;
 }
 
-.story-scroll-track { height: 360vh; }
+.story-scroll-track { height: 320vh; }
 
 .story-scroll-stage {
   isolation: isolate;
@@ -93,7 +93,7 @@
   border: 1px solid rgba(255,255,255,.88);
   border-radius: 30px;
   background: rgba(255,255,255,.8);
-  box-shadow: 0 32px 90px rgba(10,42,102,.16), inset 0 1px rgba(255,255,255,.9);
+  box-shadow: 0 8px 24px rgba(10,42,102,0.08), 0 32px 80px rgba(10,42,102,0.18), inset 0 1.5px 0 rgba(255,255,255,0.95);
   backdrop-filter: blur(24px);
   transform-style: preserve-3d;
   will-change: transform, opacity;
@@ -201,7 +201,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: rgba(10,42,102,.45);
+  color: rgba(10,42,102,0.65);
   font-size: 9px;
   font-weight: 900;
   letter-spacing: .14em;
@@ -209,8 +209,8 @@
 
 .story-scroll-progress span {
   width: 28px;
-  height: 2px;
-  background: #0396d8;
+  height: 3px;
+  background: linear-gradient(90deg, #0396D8, #0A2A66);
   transform-origin: left center;
 }
 
@@ -312,12 +312,13 @@
 }
 
 .story-phone-frame {
-  width: min(560px, calc(100vw - 24px));
-  height: min(980px, calc(100svh - 32px));
+  width: min(390px, 92vw);
+  height: min(780px, calc(100svh - 48px));
+  max-height: 844px;
 }
 
 .story-phone-notch {
-  width: 88px;
+  width: 72px;
 }
 
 .story-trust-strip {
@@ -401,21 +402,40 @@
 }
 
 @keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
 }
-.animate-shimmer { animation: shimmer 1.5s infinite; }
+/* Used as absolute overlay inside overflow:hidden chip */
+.animate-shimmer {
+  position: absolute;
+  inset: 0;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* Bounce delay utilities for 3-dot loader */
+.\[animation-delay\:120ms\] { animation-delay: 120ms; }
+.\[animation-delay\:240ms\] { animation-delay: 240ms; }
+
+/* Card hover � consistent lift */
+.card-hover {
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(10,42,102,0.13), 0 2px 8px rgba(10,42,102,0.07);
+}
 
 @media (max-width: 700px) {
   .story-phone-frame {
-    width: min(430px, 84vw);
-    height: min(900px, calc(100svh - 44px));
+    width: min(360px, 88vw);
+    height: min(720px, calc(100svh - 40px));
+    max-height: 844px;
   }
   .story-phone-notch {
     width: 54px;
     height: 5px;
   }
-  .story-scroll-track { height: 340vh; }
+  .story-scroll-track { height: 300vh; }
   .story-feature-card {
     left: 50%;
     width: min(88vw, 430px);
@@ -456,6 +476,29 @@
   .story-demo > .relative.z-10.flex {
     transform-origin: top center;
   }
+}
+
+
+/* ============================================================
+   Full-bleed native mode (< 640px — sm breakpoint)
+   The .story-phone-frame element is hidden via sm:flex;
+   the app renders edge-to-edge with normal page scroll.
+   ============================================================ */
+@media (max-width: 639px) {
+  /* Ensure the page background matches canvas color */
+  .story-page { background: #F3F7FB; }
+
+  /* TabBar safe area on notched phones */
+  .tab-bar-native {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* Touch targets: all interactive elements inside the phone ≥ 44px */
+.phone-scroll button,
+.phone-scroll a,
+.phone-scroll [role="button"] {
+  min-height: 44px;
 }
 
 @media (prefers-reduced-motion: reduce) {

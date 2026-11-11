@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import confetti from 'canvas-confetti'
 import {
   Shield, AlertTriangle, Send, Sparkles, RefreshCw, RotateCcw, CreditCard, Lock,
-  FlaskConical, ChevronLeft, ChevronRight, ShieldAlert,
+  FlaskConical, ChevronLeft, ChevronRight, ShieldAlert, CheckCircle2,
 } from 'lucide-react'
 
 import { api, streamInvestigation } from '../lib/api'
@@ -50,11 +50,31 @@ function SectionTitle({ icon, children, aside }: { icon: React.ReactNode; childr
   )
 }
 
+/** Shimmer skeleton for running tool chips */
+function ChipShimmer() {
+  return (
+    <span className="inline-flex h-7 w-24 items-center overflow-hidden rounded-full bg-cyan-soft">
+      <span className="animate-shimmer absolute inset-0 w-full bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+    </span>
+  )
+}
+
+/** Staggered container for tool chips */
+const chipContainer = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.07 } },
+}
+const chipItem = {
+  hidden: { opacity: 0, scale: 0.85, y: 4 },
+  show:   { opacity: 1, scale: 1,    y: 0, transition: { type: 'spring', stiffness: 300, damping: 24 } },
+}
+
 export function CasePage() {
   const { id: caseId } = useParams<{ id: string }>()
   const nav = useNavigate()
   const { addToast } = useToast()
   const { role } = useAuth()
+  const reduceMotion = useReducedMotion() ?? false
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -70,7 +90,7 @@ export function CasePage() {
   const [finalResult, setFinalResult] = useState<any>(null)
   const [aiOverridden, setAiOverridden] = useState(false)
 
-  // Policy Gate Modal & Shake Animation
+  // Policy Gate Modal & Shield-Shake Animation
   const [blockedModal, setBlockedModal] = useState<BlockedPolicyModal | null>(null)
   const [shakeGate, setShakeGate] = useState(false)
 
@@ -96,10 +116,9 @@ export function CasePage() {
     loadCase()
   }, [loadCase])
 
-  // Fire confetti on COMPLETED (if not reduced motion)
+  // Fire confetti on COMPLETED
   const triggerConfetti = useCallback(() => {
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (!prefersReducedMotion) {
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       confetti({
         particleCount: 80,
         spread: 60,
@@ -109,11 +128,10 @@ export function CasePage() {
     }
   }, [])
 
-  // Handle SSE live stream events
+  // SSE live stream events
   const handleRealtimeEvent = useCallback(
     (event: any) => {
       console.log('Realtime event received:', event)
-
       if (event.type === 'action_approved' || event.type === 'investigation_completed' || event.type === 'reconciliation_update') {
         loadCase()
         if (event.state === 'COMPLETED' || event.new_state === 'COMPLETED') {
@@ -128,7 +146,7 @@ export function CasePage() {
         addToast(`Simulated event delivered: ${event.event_type}`, 'warning')
       }
     },
-    [loadCase, triggerConfetti, addToast]
+    [loadCase, triggerConfetti, addToast],
   )
 
   useCaseStream(caseId, handleRealtimeEvent)
@@ -161,8 +179,8 @@ export function CasePage() {
               prev.map((c) =>
                 c.name === sseEvent.name && c.status === 'running'
                   ? { ...c, status: 'done', result: sseEvent.result, ms: sseEvent.ms }
-                  : c
-              )
+                  : c,
+              ),
             )
           } else if (sseEvent.type === 'summary_delta') {
             setStreamedSummary((prev) => prev + sseEvent.text)
@@ -179,7 +197,7 @@ export function CasePage() {
         (err) => {
           setIsInvestigating(false)
           addToast(`Investigation error: ${err.message}`, 'warning')
-        }
+        },
       )
     } catch (err: any) {
       setIsInvestigating(false)
@@ -191,7 +209,6 @@ export function CasePage() {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMessage.trim() || !caseId || sendingMessage) return
-
     setSendingMessage(true)
     try {
       await api.addMessage(caseId, newMessage.trim())
@@ -205,7 +222,7 @@ export function CasePage() {
     }
   }
 
-  // "Check PayPal now": real Orders API + Payments API + Transaction Search check. Read-only, always allowed.
+  // Check PayPal now
   const [checking, setChecking] = useState(false)
   const handleCheckNow = async () => {
     if (!caseId) return
@@ -218,13 +235,13 @@ export function CasePage() {
       )
       await loadCase()
     } catch (err: any) {
-      addToast(`Couldn’t check PayPal: ${err.message}`, 'warning')
+      addToast(`Couldn't check PayPal: ${err.message}`, 'warning')
     } finally {
       setChecking(false)
     }
   }
 
-  // Handle Action Click (e.g., RETRY, REFUND, RECONCILE)
+  // Handle Action Click — policy-gated
   const handleActionClick = async (action: string) => {
     if (!caseData || !caseId) return
     if (action === 'RECONCILE') return handleCheckNow()
@@ -233,31 +250,34 @@ export function CasePage() {
       ['REFUND_REQUESTED', 'REFUND_SUBMITTED', 'REFUND_REQUEST_DENIED'].includes(event.event_type),
     )
     const waitingForSeller = refundEvents[refundEvents.length - 1]?.event_type === 'REFUND_REQUESTED'
-    const sellerDecision = (role === 'seller' || role === 'admin')
-      && waitingForSeller
-      && ['REFUND', 'DENY_REFUND'].includes(action)
+    const sellerDecision =
+      (role === 'seller' || role === 'admin') &&
+      waitingForSeller &&
+      ['REFUND', 'DENY_REFUND'].includes(action)
     const isPermitted = caseData.permitted_actions?.includes(action)
 
     if (!isPermitted && !sellerDecision) {
-      // Find matching blocked action rule
-      const blocked = caseData.policy_decision?.blocked_actions?.find(
-        (b: any) => b.action === action
-      )
+      const blocked = caseData.policy_decision?.blocked_actions?.find((b: any) => b.action === action)
       setBlockedModal({
         action,
         rule_id: blocked?.rule_id || 'R03_UNKNOWN_FAILS_CLOSED',
         reason: blocked?.reason || `Action '${action}' is strictly blocked by the deterministic policy engine.`,
       })
       setShakeGate(true)
-      setTimeout(() => setShakeGate(false), 500)
+      setTimeout(() => setShakeGate(false), 600)
       return
     }
 
     try {
       await api.approveAction(caseId, action, `${role} action from Case Page UI`)
-      const message = action === 'REFUND'
-        ? role === 'buyer' ? 'Refund request sent to the seller.' : 'Refund approved and submitted to PayPal.'
-        : action === 'DENY_REFUND' ? 'Refund request declined.' : `Action ${action} approved and submitted.`
+      const message =
+        action === 'REFUND'
+          ? role === 'buyer'
+            ? 'Refund request sent to the seller.'
+            : 'Refund approved and submitted to PayPal.'
+          : action === 'DENY_REFUND'
+          ? 'Refund request declined.'
+          : `Action ${action} approved and submitted.`
       addToast(message, 'success')
       loadCase()
     } catch (err: any) {
@@ -281,8 +301,8 @@ export function CasePage() {
         <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#FFF4D6] text-warning">
           <AlertTriangle size={30} />
         </span>
-        <h2 className="text-[20px] font-extrabold text-navy">{error ? 'Couldn’t load this case' : 'Case not found'}</h2>
-        <p className="text-[13px] text-muted">{error || 'We couldn’t find the case you asked for.'}</p>
+        <h2 className="text-[20px] font-extrabold text-navy">{error ? "Couldn't load this case" : 'Case not found'}</h2>
+        <p className="text-[13px] text-muted">{error || "We couldn't find the case you asked for."}</p>
         <div className="flex items-center justify-center gap-2.5">
           <Button
             variant="outline"
@@ -311,6 +331,7 @@ export function CasePage() {
   const waitingForSeller = refundEvents[refundEvents.length - 1]?.event_type === 'REFUND_REQUESTED'
   const sellerMayDecideRefund = (role === 'seller' || role === 'admin') && waitingForSeller
   const order = caseData.evidence_bundle?.order
+  const isCompleted = currentState === 'COMPLETED'
 
   return (
     <div className="space-y-4 px-5 pb-8 pt-1">
@@ -322,7 +343,7 @@ export function CasePage() {
         <SimulationBanner message="Simulation: this case includes events injected by the fault lab." />
       )}
 
-      {/* Case summary, styled like a wallet card */}
+      {/* Case summary wallet card */}
       <section className="rounded-[28px] bg-gradient-to-br from-cyan via-[#0A74C8] to-navy p-5 text-white shadow-card">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -332,19 +353,36 @@ export function CasePage() {
               <span className="ml-1.5 text-[14px] font-bold text-white/75">{order?.currency ?? 'USD'}</span>
             </p>
           </div>
-          <StatusBadge status={currentState} onDark />
+          {/* COMPLETED badge gets an expanding ring */}
+          <div className="relative flex items-center">
+            {isCompleted && !reduceMotion && (
+              <motion.span
+                aria-hidden
+                className="absolute -inset-2 rounded-full border-2 border-success"
+                animate={{ scale: [1, 1.4, 1], opacity: [0.5, 0, 0.5] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: 'easeOut' }}
+              />
+            )}
+            <StatusBadge status={currentState} onDark />
+          </div>
         </div>
         <p className="mt-4 truncate rounded-xl bg-white/12 px-3 py-2 font-mono text-[11.5px] text-white/90">
           PayPal order {caseData.order_id}
         </p>
+        {/* Primary actions — visually louder */}
         <div className="mt-4 grid grid-cols-5 gap-2">
-          <Button variant="white" className="col-span-3 !text-[13.5px]" onClick={handleStartInvestigation} loading={isInvestigating}>
+          <Button
+            variant="white"
+            className="col-span-3 !text-[13.5px] font-bold"
+            onClick={handleStartInvestigation}
+            loading={isInvestigating}
+          >
             <Sparkles size={16} className="text-cyan" />
             {isInvestigating ? 'Investigating…' : 'Run AI check'}
           </Button>
           <button
             onClick={() => setIsLabOpen(true)}
-            className="col-span-2 flex min-h-[50px] items-center justify-center gap-1.5 rounded-full bg-white/15 text-[13.5px] font-bold text-white ring-1 ring-white/30"
+            className="col-span-2 flex min-h-[50px] items-center justify-center gap-1.5 rounded-full bg-white/15 text-[13.5px] font-bold text-white ring-1 ring-white/30 transition hover:bg-white/22 active:scale-[0.97]"
           >
             <FlaskConical size={15} /> Fault lab
           </button>
@@ -356,7 +394,7 @@ export function CasePage() {
         current={finalResult || caseData.latest_agent_run ? 2 : caseData.evidence_bundle?.status_report?.reachable ? 1 : 0}
       />
 
-      {/* Payment status check across PayPal's APIs */}
+      {/* Payment status check */}
       <Card>
         <PaymentStatusPanel
           report={caseData.evidence_bundle?.status_report}
@@ -365,71 +403,85 @@ export function CasePage() {
         />
       </Card>
 
-      {/* Where the payment stands */}
+      {/* State machine */}
       <Card>
         <SectionTitle icon={<Shield size={16} />}>Where it stands</SectionTitle>
         <StateMachineViz currentState={currentState} blockedRules={caseData.policy_decision?.blocked_actions} />
       </Card>
 
-      {/* Actions, gated by the policy engine */}
-      <Card className={shakeGate ? 'ring-2 ring-danger/40' : ''}>
-        <SectionTitle icon={<Lock size={16} />}>What you can do</SectionTitle>
-        <p className="mb-3 text-[12.5px] leading-snug text-muted">
-          Only actions that PayPal’s records allow are unlocked. Tap a locked one to see why.
-        </p>
-        <div className="space-y-2.5">
-          <Button
-            className="w-full"
-            variant={retryOk ? 'primary' : 'outline'}
-            locked={!retryOk}
-            onClick={() => handleActionClick('RETRY')}
-          >
-            {retryOk ? <RotateCcw size={16} /> : <Lock size={15} />}
-            Retry payment
-          </Button>
-          {sellerMayDecideRefund && (
-            <Button className="w-full" onClick={() => handleActionClick('REFUND')}>
-              <CreditCard size={16} /> Approve refund
-            </Button>
-          )}
-          {role === 'buyer' && (
+      {/* Actions — policy gated with shield shake */}
+      <motion.div
+        animate={
+          shakeGate && !reduceMotion
+            ? { x: [-4, 6, -6, 5, -3, 2, 0] }
+            : { x: 0 }
+        }
+        transition={{ duration: 0.5, ease: 'easeOut' }}
+      >
+        <Card className={shakeGate ? 'ring-2 ring-danger/50' : ''}>
+          <SectionTitle icon={<Lock size={16} />}>What you can do</SectionTitle>
+          <p className="mb-3 text-[12.5px] leading-snug text-muted">
+            Only actions that PayPal's records allow are unlocked. Tap a locked one to see why.
+          </p>
+          <div className="space-y-2.5">
+            {/* PRIMARY — Retry (louder if allowed, quieter when locked) */}
             <Button
               className="w-full"
-              variant={refundOk ? 'primary' : 'outline'}
-              locked={!refundOk}
-              onClick={() => handleActionClick('REFUND')}
+              variant={retryOk ? 'primary' : 'outline'}
+              locked={!retryOk}
+              onClick={() => handleActionClick('RETRY')}
             >
-              {refundOk ? <CreditCard size={16} /> : <Lock size={15} />}
-              Request refund
+              {retryOk ? <RotateCcw size={16} /> : <Lock size={15} />}
+              Retry payment
             </Button>
-          )}
-          {sellerMayDecideRefund && (
-            <Button
-              className="w-full"
-              variant="danger"
-              onClick={() => handleActionClick('DENY_REFUND')}
-            >
-              Decline refund request
-            </Button>
-          )}
-          {currentState === 'REFUND_PENDING' && (
-            <p className="rounded-2xl bg-[#FFF4D6] p-3 text-[12.5px] leading-snug text-warning">
-              {waitingForSeller
-                ? 'Refund request is waiting for the seller’s approval. No refund has been sent yet.'
-                : 'The seller approved the refund. PayPal is processing it; this is not confirmed as refunded yet.'}
-            </p>
-          )}
-          <Button className="w-full" variant="outline" onClick={() => handleActionClick('RECONCILE')}>
-            <RefreshCw size={15} /> Check PayPal again
-          </Button>
-        </div>
-        <p className="mt-3 flex items-start gap-1.5 border-t border-line pt-3 text-[11.5px] leading-snug text-muted">
-          <Lock size={12} className="mt-0.5 shrink-0 text-navy" />
-          A timeout is never treated as a failure. A retry needs a verified failure from PayPal.
-        </p>
-      </Card>
 
-      {/* AI investigator */}
+            {/* Seller approves refund */}
+            {sellerMayDecideRefund && (
+              <Button className="w-full" onClick={() => handleActionClick('REFUND')}>
+                <CreditCard size={16} /> Approve refund
+              </Button>
+            )}
+
+            {/* Buyer requests refund */}
+            {role === 'buyer' && (
+              <Button
+                className="w-full"
+                variant={refundOk ? 'primary' : 'outline'}
+                locked={!refundOk}
+                onClick={() => handleActionClick('REFUND')}
+              >
+                {refundOk ? <CreditCard size={16} /> : <Lock size={15} />}
+                Request refund
+              </Button>
+            )}
+
+            {sellerMayDecideRefund && (
+              <Button className="w-full" variant="danger" onClick={() => handleActionClick('DENY_REFUND')}>
+                Decline refund request
+              </Button>
+            )}
+
+            {currentState === 'REFUND_PENDING' && (
+              <p className="rounded-2xl bg-[#FFF4D6] p-3 text-[12.5px] leading-snug text-warning">
+                {waitingForSeller
+                  ? "Refund request is waiting for the seller's approval. No refund has been sent yet."
+                  : 'The seller approved the refund. PayPal is processing it; this is not confirmed as refunded yet.'}
+              </p>
+            )}
+
+            {/* SECONDARY — Check PayPal (always visible but visually quieter) */}
+            <Button className="w-full opacity-80" variant="outline" onClick={() => handleActionClick('RECONCILE')}>
+              <RefreshCw size={15} /> Check PayPal again
+            </Button>
+          </div>
+          <p className="mt-3 flex items-start gap-1.5 border-t border-line pt-3 text-[11.5px] leading-snug text-muted">
+            <Lock size={12} className="mt-0.5 shrink-0 text-navy" />
+            A timeout is never treated as a failure. A retry needs a verified failure from PayPal.
+          </p>
+        </Card>
+      </motion.div>
+
+      {/* AI Investigator */}
       <Card>
         <SectionTitle
           icon={<Sparkles size={16} />}
@@ -439,7 +491,9 @@ export function CasePage() {
                 <span className="h-2 w-2 animate-ping rounded-full bg-cyan" /> Checking PayPal
               </span>
             ) : finalResult ? (
-              <span className="rounded-full bg-[#E4F5EB] px-2.5 py-1 text-[11.5px] font-bold text-success">Ready</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#E4F5EB] px-2.5 py-1 text-[11.5px] font-bold text-success">
+                <CheckCircle2 size={12} /> Ready
+              </span>
             ) : null
           }
         >
@@ -461,29 +515,52 @@ export function CasePage() {
           </div>
         )}
 
+        {/* Staggered tool chips — spring in, shimmer on running */}
         {toolChips.length > 0 && (
           <div className="mb-3">
             <p className="mb-1.5 text-[11.5px] font-bold text-muted">Read-only PayPal lookups</p>
-            <div className="flex flex-wrap gap-1.5">
+            <motion.div
+              className="flex flex-wrap gap-1.5"
+              variants={chipContainer}
+              initial="hidden"
+              animate="show"
+            >
               {toolChips.map((chip) => (
-                <span
+                <motion.span
                   key={chip.id}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-mono text-[11px] font-medium ${
+                  variants={chipItem}
+                  className={`relative inline-flex items-center gap-1.5 overflow-hidden rounded-full px-2.5 py-1 font-mono text-[11px] font-medium ${
                     chip.status === 'running'
-                      ? 'animate-pulse bg-cyan-soft text-cyan-deep'
+                      ? 'bg-cyan-soft text-cyan-deep'
                       : chip.status === 'done'
                       ? 'bg-[#E4F5EB] text-success'
                       : 'bg-[#FDEBE6] text-danger'
                   }`}
                 >
-                  {chip.name}
-                  {chip.status === 'running' && (
-                    <span className="h-2.5 w-2.5 animate-spin rounded-full border border-current border-t-transparent" />
+                  {chip.status === 'running' && !reduceMotion && (
+                    <span className="animate-shimmer absolute inset-0 w-full bg-gradient-to-r from-transparent via-white/50 to-transparent" />
                   )}
-                  {chip.status === 'done' && <span>ok{chip.ms ? ` · ${chip.ms}ms` : ''}</span>}
-                </span>
+                  <span className="relative">{chip.name}</span>
+                  {chip.status === 'running' && (
+                    <span className="relative flex gap-0.5">
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-cyan-deep [animation-delay:0ms]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-cyan-deep [animation-delay:120ms]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-cyan-deep [animation-delay:240ms]" />
+                    </span>
+                  )}
+                  {chip.status === 'done' && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                      className="relative"
+                    >
+                      ✓{chip.ms ? ` ${chip.ms}ms` : ''}
+                    </motion.span>
+                  )}
+                </motion.span>
               ))}
-            </div>
+            </motion.div>
           </div>
         )}
 
@@ -499,8 +576,8 @@ export function CasePage() {
                     <button
                       key={idx}
                       onClick={() => setHighlightedRef((h) => (h === refStr ? null : refStr))}
-                      className={`rounded-full px-2 py-0.5 font-mono text-[11px] ${
-                        highlightedRef === refStr ? 'bg-cyan text-white' : 'bg-cyan-soft text-cyan-deep'
+                      className={`rounded-full px-2 py-0.5 font-mono text-[11px] transition-colors ${
+                        highlightedRef === refStr ? 'bg-cyan text-white' : 'bg-cyan-soft text-cyan-deep hover:bg-cyan/20'
                       }`}
                     >
                       {refStr}
@@ -538,7 +615,7 @@ export function CasePage() {
 
         {aiOverridden && (
           <div className="mt-3 flex items-center gap-2 rounded-2xl bg-[#FFF4D6] p-3 text-[12px] font-semibold text-warning">
-            <Shield size={14} /> The policy gate adjusted the AI’s recommendation to keep this safe.
+            <Shield size={14} /> The policy gate adjusted the AI's recommendation to keep this safe.
           </div>
         )}
       </Card>
@@ -551,14 +628,18 @@ export function CasePage() {
         >
           Evidence timeline
         </SectionTitle>
-        <EvidenceTimeline events={caseData.events as TimelineEvent[]} highlightedRef={highlightedRef} />
+        <EvidenceTimeline
+          events={caseData.events as TimelineEvent[]}
+          highlightedRef={highlightedRef}
+          onHoverRef={setHighlightedRef}
+        />
       </Card>
 
-      {/* Notes */}
+      {/* Case notes */}
       <Card>
         <h2 className="text-[15px] font-extrabold text-navy">Case notes</h2>
         <p className="mb-3 mt-0.5 text-[12px] leading-snug text-muted">
-          Free text from people. It’s sanitized and never changes a policy decision.
+          Free text from people. It's sanitized and never changes a policy decision.
         </p>
 
         <div className="mb-3 space-y-2">
@@ -588,7 +669,7 @@ export function CasePage() {
             type="submit"
             disabled={!newMessage.trim() || sendingMessage}
             aria-label="Send note"
-            className="flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-full bg-cyan text-white disabled:opacity-40"
+            className="flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-full bg-cyan text-white transition active:scale-[0.97] disabled:opacity-40"
           >
             {sendingMessage ? (
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -599,7 +680,7 @@ export function CasePage() {
         </form>
       </Card>
 
-      {/* Blocked action sheet */}
+      {/* Blocked action sheet — shield-shake + rule chip */}
       <AnimatePresence>
         {blockedModal && (
           <Sheet
@@ -611,9 +692,13 @@ export function CasePage() {
             }
           >
             <div className="space-y-3 pt-1">
-              <p className="rounded-xl bg-[#FDEBE6] px-3 py-2 font-mono text-[12px] font-semibold text-danger">
-                {blockedModal.rule_id}
-              </p>
+              {/* Rule id chip — prominent, monospaced, authoritative */}
+              <div className="flex items-center gap-2">
+                <span className="rounded-lg bg-[#FDEBE6] px-3 py-1.5 font-mono text-[13px] font-bold text-danger ring-1 ring-danger/20">
+                  {blockedModal.rule_id}
+                </span>
+                <span className="text-[12px] font-semibold text-muted">Policy rule</span>
+              </div>
               <p className="text-[14px] leading-relaxed text-ink">{blockedModal.reason}</p>
               <p className="rounded-2xl bg-mist p-3 text-[12px] leading-relaxed text-muted">
                 ResolveAI blocks duplicate charges and invalid state changes until PayPal has confirmed a final outcome.
