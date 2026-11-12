@@ -35,13 +35,17 @@ async def _simulate_lost_response(session: AsyncSession, case: Case, order: Orde
     paypal_before = snap.raw_capture_status or snap.order_status or snap.capture_status
     real_capture_requested = False
 
+    capture_outcome = ""
     if snap.capture_status == "PENDING" and (snap.order_status or "").upper() == "APPROVED" and not snap.capture_id:
         req_id = f"sim-lost-{uuid.uuid4().hex[:12]}"
-        try:
-            await capture_order(order.paypal_order_id, request_id=req_id)   # response deliberately discarded
+        result = await capture_order(order.paypal_order_id, request_id=req_id)  # answer is "lost" to the app
+        # capture_order never raises; look at what PayPal actually did so the evidence is honest.
+        if result.capture_status == "COMPLETED":
             real_capture_requested = True
-        except Exception:
-            pass
+        elif result.capture_status == "DENIED" or (result.note or "").startswith("PayPal rejected"):
+            capture_outcome = f"PayPal did NOT accept the capture: {result.note or result.raw_ref}. "
+        else:
+            real_capture_requested = True  # timed out: genuinely outcome-unknown
 
     # Wipe local knowledge of the outcome.
     if attempts:
@@ -70,6 +74,7 @@ async def _simulate_lost_response(session: AsyncSession, case: Case, order: Orde
             "SIMULATION: the capture response was lost. Only our local record was wiped; "
             f"PayPal said '{paypal_before}' just before. "
             + ("A real capture was sent and its response discarded. " if real_capture_requested else "")
+            + capture_outcome
             + "Attempt marked UNKNOWN until reconciled."
         ),
         is_simulated=True,
