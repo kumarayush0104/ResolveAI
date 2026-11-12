@@ -1,4 +1,4 @@
-"""Webhooks drive state through the policy engine, and lab scenario 1 recovers a REAL capture."""
+"""Webhooks drive state through policy; Fault Lab scenarios remain local simulations."""
 import httpx
 import pytest
 import respx
@@ -7,7 +7,6 @@ from sqlalchemy import select
 from backend.app.config import settings
 from backend.app.db.models import Case, Order, PaymentAttempt, CaseEvent
 from backend.app.services.lab import _simulate_lost_response
-from backend.app.services.reconciliation import reconcile_case
 
 BASE = settings.paypal_base_url
 CAP = "CAPWH000000000001"
@@ -76,8 +75,8 @@ async def test_order_approved_webhook_does_not_change_state(async_client, auth_t
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_lab_scenario1_recovers_the_real_capture_id(async_client, auth_tokens, db_session):
-    mock_base(order_json())                                   # PayPal really has the completed capture
+async def test_lab_scenario1_marks_unknown_without_making_a_paypal_capture(async_client, auth_tokens, db_session):
+    mock_base(order_json())
     h = auth_tokens["buyer"]
     oid = (await async_client.post("/api/orders", json={"amount": 25.0}, headers=h)).json()["id"]
     case_id = (await async_client.post("/api/cases", json={"order_id": oid}, headers=h)).json()["id"]
@@ -86,31 +85,11 @@ async def test_lab_scenario1_recovers_the_real_capture_id(async_client, auth_tok
     order = (await db_session.execute(select(Order).where(Order.id == oid))).scalar_one()
 
     info = await _simulate_lost_response(db_session, case, order)
-    assert info["paypal_before"] == "COMPLETED"
-    assert case.current_policy_state == "UNKNOWN" and order.status == "CREATED"
+    assert info["status"] == "UNKNOWN" and info["is_simulated"] is True
+    assert case.current_policy_state == "UNKNOWN"
     attempts = (await db_session.execute(select(PaymentAttempt).where(PaymentAttempt.order_id == oid))).scalars().all()
-    assert all(a.paypal_capture_id is None for a in attempts)   # local knowledge truly wiped
-
-    out = await reconcile_case(case_id, db_session, record_evidence=True)
-    assert out["current_state"] == "COMPLETED"
-    attempts = (await db_session.execute(select(PaymentAttempt).where(PaymentAttempt.order_id == oid))).scalars().all()
-    assert [a.paypal_capture_id for a in attempts] == [CAP]      # the REAL id, never "sim-cap-..."
-    events = (await db_session.execute(select(CaseEvent).where(CaseEvent.case_id == case_id))).scalars().all()
-    assert not any("sim-cap" in e.description for e in events)
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_lab_scenario1_stays_unknown_if_paypal_has_nothing(async_client, auth_tokens, db_session):
-    """If the order was never captured, the reconciler must NOT invent a completion."""
-    mock_base(order_json(status="CREATED", with_capture=False))
-    h = auth_tokens["buyer"]
-    oid = (await async_client.post("/api/orders", json={"amount": 25.0}, headers=h)).json()["id"]
-    case_id = (await async_client.post("/api/cases", json={"order_id": oid}, headers=h)).json()["id"]
-    case = (await db_session.execute(select(Case).where(Case.id == case_id))).scalar_one()
-    order = (await db_session.execute(select(Order).where(Order.id == oid))).scalar_one()
-
-    await _simulate_lost_response(db_session, case, order)
-    out = await reconcile_case(case_id, db_session, record_evidence=True)
-    assert out["current_state"] != "COMPLETED"
-    assert "RETRY" in [b["action"] for b in out["decision"]["blocked_actions"]]
+    simulated_attempts = [attempt for attempt in attempts if attempt.is_simulated]
+    assert len(simulated_attempts) == 1
+    assert simulated_attempts[0].status == "UNKNOWN"
+    assert simulated_attempts[0].paypal_capture_id is None
+    assert order.status == "CREATED"

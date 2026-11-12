@@ -21,6 +21,7 @@ export interface StatusReport {
   notes: string[]
   checked_at: string
   reachable: boolean
+  is_simulated?: boolean
 }
 
 const LABELS: Record<string, { name: string; sub: string }> = {
@@ -62,7 +63,9 @@ export function PaymentStatusPanel({
       <div className="mb-3">
         <h2 className="text-[15px] font-extrabold text-navy">Payment status check</h2>
         <p className="mt-0.5 text-[12px] leading-snug text-muted">
-          We ask PayPal three ways. Only verified PayPal responses count.
+          {report?.is_simulated
+            ? 'This is a local Fault Lab result; no PayPal status was requested.'
+            : 'We ask PayPal three ways. Only verified PayPal responses count.'}
         </p>
       </div>
 
@@ -87,7 +90,9 @@ export function PaymentStatusPanel({
               <HelpCircle size={16} className="mt-0.5 shrink-0" />
             )}
             <span>
-              {conflict
+              {report.is_simulated
+                ? `Fault Lab simulation: ${report.consensus}. No PayPal request was made.`
+                : conflict
                 ? 'Sources disagree. Retry, refund and fulfillment stay locked until this is resolved.'
                 : report.reachable
                 ? `All reachable sources agree: ${report.consensus}.`

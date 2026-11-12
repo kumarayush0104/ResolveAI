@@ -132,7 +132,7 @@ export function CasePage() {
   const handleRealtimeEvent = useCallback(
     (event: any) => {
       console.log('Realtime event received:', event)
-      if (event.type === 'action_approved' || event.type === 'investigation_completed' || event.type === 'reconciliation_update') {
+      if (event.type === 'action_approved' || event.type === 'investigation_completed' || event.type === 'reconciliation_update' || event.type === 'lab_event') {
         loadCase()
         if (event.state === 'COMPLETED' || event.new_state === 'COMPLETED') {
           triggerConfetti()

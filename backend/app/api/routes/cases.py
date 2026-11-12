@@ -151,22 +151,50 @@ async def get_case_detail(
     )
     attempts = att_res.scalars().all()
 
-    # Authoritative live PayPal status: Orders API + Payments API + Transaction Search
-    status_report = await check_payment_status(case.order, list(attempts))
-    snapshot = status_report.snapshot
-    if not status_report.reachable:
+    simulated_state = any(event.is_simulated for event in case.events)
+    if simulated_state:
         snapshot = ProviderSnapshot(
-            order_status=case.order.status,
+            order_status=case.current_policy_state,
             capture_status=case.current_policy_state,
             order_id=case.order.paypal_order_id,
             source="api",
-            raw_ref="Snapshot unavailable during read",
+            raw_ref="fault-lab-local-simulation",
+            is_simulated=True,
+            note="Local Fault Lab evidence; no PayPal status request was made.",
         )
+        status_report_data = {
+            "order_id": case.order.paypal_order_id,
+            "capture_id": None,
+            "consensus": case.current_policy_state,
+            "agrees": True,
+            "sources": [],
+            "conflicts": [],
+            "notes": ["Fault Lab simulation. No PayPal status request was made."],
+            "snapshot": snapshot.to_dict(),
+            "reachable": True,
+            "checked_at": snapshot.observed_at,
+            "is_simulated": True,
+        }
+        policy_attempts = [attempt for attempt in attempts if attempt.is_simulated]
+    else:
+        # Authoritative live PayPal status: Orders API + Payments API + Transaction Search
+        status_report = await check_payment_status(case.order, list(attempts))
+        snapshot = status_report.snapshot
+        status_report_data = status_report.to_dict()
+        policy_attempts = list(attempts)
+        if not status_report.reachable:
+            snapshot = ProviderSnapshot(
+                order_status=case.order.status,
+                capture_status=case.current_policy_state,
+                order_id=case.order.paypal_order_id,
+                source="api",
+                raw_ref="Snapshot unavailable during read",
+            )
 
-    # Compute current authoritative policy decision
+    # Compute the policy decision from the active provider evidence or local simulation.
     policy_decision = evaluate(
         snapshot=snapshot,
-        attempts=attempts,
+        attempts=policy_attempts,
         events=case.events,
     )
 
@@ -179,7 +207,7 @@ async def get_case_detail(
         "permitted_actions": case.permitted_actions,
         "evidence_bundle": {
             "snapshot": snapshot.to_dict(),
-            "status_report": status_report.to_dict(),
+            "status_report": status_report_data,
             "attempts": [
                 {
                     "id": a.id,
@@ -421,6 +449,18 @@ async def approve_case_action(
     require_case_access(case, current_user)
 
     action_upper = action.upper()
+    simulated_attempt = (await session.execute(
+        select(PaymentAttempt.id).where(
+            PaymentAttempt.order_id == case.order_id,
+            PaymentAttempt.is_simulated.is_(True),
+        ).limit(1)
+    )).scalar_one_or_none()
+    if simulated_attempt and action_upper != "VIEW_DETAILS":
+        raise HTTPException(
+            status_code=409,
+            detail="This case contains Fault Lab payment simulations. State-changing payment actions are disabled.",
+        )
+
     refund_events = []
     if action_upper in ("REFUND", "DENY_REFUND"):
         refund_events = (await session.execute(

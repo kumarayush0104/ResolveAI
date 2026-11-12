@@ -201,7 +201,7 @@ async def run_reconciliation_cycle() -> None:
     """Reconcile every unresolved case, plus unresolved orders that never got a case.
 
     A buyer whose capture response was lost may not have opened a case yet, so we also look at
-    orders that have an UNKNOWN or PENDING attempt. Unreachable PayPal triggers exponential backoff.
+    orders that have an UNKNOWN or PENDING attempt. Fault Lab data stays local and is skipped.
     """
     async with AsyncSessionLocal() as session:
         result = await session.execute(
@@ -213,6 +213,15 @@ async def run_reconciliation_cycle() -> None:
         case_order_ids = set()
         for c in cases:
             case_order_ids.add(c.order_id)
+            simulated_event = (await session.execute(
+                select(CaseEvent.id).where(
+                    CaseEvent.case_id == c.id,
+                    CaseEvent.is_simulated.is_(True),
+                ).limit(1)
+            )).scalar_one_or_none()
+            if simulated_event:
+                continue
+
             key = f"case:{c.id}"
             if not _due(key):
                 continue
@@ -231,6 +240,15 @@ async def run_reconciliation_cycle() -> None:
         for order in {o.id: o for o in orphan_res.scalars().all()}.values():
             if order.id in case_order_ids:
                 continue
+            simulated_attempt = (await session.execute(
+                select(PaymentAttempt.id).where(
+                    PaymentAttempt.order_id == order.id,
+                    PaymentAttempt.is_simulated.is_(True),
+                ).limit(1)
+            )).scalar_one_or_none()
+            if simulated_attempt:
+                continue
+
             key = f"order:{order.id}"
             if not _due(key):
                 continue
