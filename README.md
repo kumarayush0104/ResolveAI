@@ -295,12 +295,14 @@ Deployed on **Render** via [`render.yaml`](render.yaml). Push to `main` → auto
 
 | Document | Description |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | System overview, sequence and state diagrams |
-| [`docs/state-machine.md`](docs/state-machine.md) | Full state machine with refund flow |
-| [`docs/threat-model.md`](docs/threat-model.md) | Security considerations |
-| [`docs/known-limitations.md`](docs/known-limitations.md) | Sandbox constraints and known gaps |
-| [`docs/test-scenarios.md`](docs/test-scenarios.md) | Manual and automated test scenarios |
+| [`docs/architecture.md`](docs/architecture.md) | System overview, sequence and state diagrams (Mermaid) |
+| [`docs/state-machine.md`](docs/state-machine.md) | Full state machine with refund flow and core invariants |
+| [`docs/threat-model.md`](docs/threat-model.md) | Trust boundaries and security mitigations |
+| [`docs/known-limitations.md`](docs/known-limitations.md) | Sandbox constraints, PayPal API differences, known gaps |
+| [`docs/test-scenarios.md`](docs/test-scenarios.md) | Manual and automated test scenarios (31 passing) |
+| [`docs/demo-script.md`](docs/demo-script.md) | 3-minute walkthrough script for the demo video |
 | [`docs/postman/`](docs/postman/) | Postman collection for all API endpoints |
+| [`CONTRIBUTORS.md`](CONTRIBUTORS.md) | Team members and their roles |
 
 ---
 
