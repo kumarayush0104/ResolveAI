@@ -26,6 +26,22 @@ def offline_investigate(
             confidence=1.0,
         )
 
+    # Approved by the buyer but never captured: nothing is pending at PayPal, no money moved.
+    if (snapshot and (snapshot.order_status or "").upper() == "APPROVED" and not snapshot.capture_id
+            and cap_status == "PENDING"):
+        return AgentInvestigationResult(
+            classification="PENDING",
+            summary="The buyer approved the order, but PayPal has no capture for it, so no money has moved. "
+                    "The capture was never completed or was rejected (for example a declined card).",
+            buyer_message="You have not been charged. Please try paying again, or use a different payment method.",
+            seller_message="No payment received. Do not fulfill this order.",
+            evidence_refs=["snapshot.order_status", "snapshot.capture_id"],
+            unknowns=["why_the_capture_was_not_completed"],
+            recommended_action="RECONCILE",
+            requires_human_approval=False,
+            confidence=0.9,
+        )
+
     # Check for pending status
     if cap_status == "PENDING":
         return AgentInvestigationResult(
