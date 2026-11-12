@@ -39,7 +39,7 @@ The core invariant: **a timeout is never treated as failure.** Unknown state fai
 |:---:|:---:|:---:|:---:|
 | ![Scroll Story](docs/assets/screenshots/scroll-story.png) | ![Checkout](docs/assets/screenshots/checkout.png) | ![Investigation](docs/assets/screenshots/investigation.png) | ![Console](docs/assets/screenshots/console.png) |
 
-> ▶ **[Watch the 3-minute demo video](https://www.youtube.com/watch?v=PLACEHOLDER)**
+> ▶ **[Watch the 3-minute demo video](https://youtu.be/B0ksd93ta2A)**
 
 ---
 
