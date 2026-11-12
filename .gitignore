@@ -46,11 +46,30 @@ dist/
 .next/
 out/
 
-# User backup notes
-work done till now/
+# Editor and OS junk
 .vscode/
 .idea/
 *.swp
 *.swo
 .DS_Store
 Thumbs.db
+
+# Internal agent / planning artifacts (never publish)
+work done till now/
+in-depth.md
+project_plan.md
+PROGRESS.md
+DEMO_VIDEO_SCRIPT.md
+ResolveAI_Detailed_Project_Plan.docx
+docs/run_measurements.py
+
+# Legacy duplicate backend folders (canonical code lives in backend/app/)
+backend/agent/
+backend/db/
+backend/paypal/
+backend/policy/
+backend/security/
+backend/services/
+
+# Scratch test scripts accidentally placed in services/
+backend/app/services/test_*.py
