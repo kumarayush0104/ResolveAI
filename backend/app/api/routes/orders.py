@@ -1,6 +1,7 @@
 import uuid
 import json
 from decimal import Decimal, ROUND_HALF_UP
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, Header, status
@@ -22,7 +23,7 @@ from backend.app.policy.rules import (
     R07_ONE_ACTIVE_ATTEMPT,
 )
 from backend.app.services.reconciliation import reconcile_order, reconcile_case
-from backend.app.services.status_check import check_payment_status
+from backend.app.services.status_check import check_payment_status, awaiting_capture
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -277,7 +278,23 @@ async def capture_order_payment(
                         "recovered": True,
                         "capture_id": report.snapshot.capture_id},
             )
-        if verdict != "DENIED":
+        stale_cutoff = datetime.now(timezone.utc) - timedelta(seconds=15)
+
+        def _stale(a: PaymentAttempt) -> bool:
+            ts = a.updated_at or a.created_at
+            if ts and ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            return not ts or ts < stale_cutoff
+
+        if verdict == "PENDING" and awaiting_capture(report.snapshot) and all(_stale(a) for a in prior):
+            # PayPal says APPROVED with no capture: the earlier capture never took effect (it was
+            # rejected or never arrived). Nothing was charged, so a fresh capture is safe. PayPal
+            # itself still refuses a second capture of the same order, so a double charge is impossible.
+            for a in prior:
+                if a.status in ("PENDING", "CREATED"):
+                    a.status = "UNKNOWN"
+            await session.commit()
+        elif verdict != "DENIED":
             rule = R02_PENDING_BLOCKS_RETRY if verdict == "PENDING" else R03_UNKNOWN_FAILS_CLOSED
             msg = ("The earlier payment is still pending at PayPal. Retry blocked."
                    if verdict == "PENDING"
@@ -332,6 +349,10 @@ async def capture_order_payment(
         message = "The response was lost, but PayPal confirms the payment completed. You will not be charged again."
     elif attempt.status == "UNKNOWN":
         message = "We could not confirm the result yet. Do not pay again. We are checking with PayPal."
+        if snapshot.note and "rejected the capture" in snapshot.note:
+            message = f"{snapshot.note} The order is still approved, not charged. You can try again."
+    elif attempt.status == "DENIED" and snapshot.note:
+        message = snapshot.note
 
     return {
         "order_id": order.id,
