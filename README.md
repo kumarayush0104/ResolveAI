@@ -1,7 +1,6 @@
 <div align="center">
 
-<!-- Replace with your actual banner once you have one -->
-![ResolveAI Banner](docs/assets/banner.png)
+![ResolveAI Banner](docs/assets/banner.jpeg)
 
 # ResolveAI
 
