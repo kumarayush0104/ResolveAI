@@ -300,7 +300,6 @@ Deployed on **Render** via [`render.yaml`](render.yaml). Push to `main` → auto
 | [`docs/threat-model.md`](docs/threat-model.md) | Trust boundaries and security mitigations |
 | [`docs/known-limitations.md`](docs/known-limitations.md) | Sandbox constraints, PayPal API differences, known gaps |
 | [`docs/test-scenarios.md`](docs/test-scenarios.md) | Manual and automated test scenarios (31 passing) |
-| [`docs/demo-script.md`](docs/demo-script.md) | 3-minute walkthrough script for the demo video |
 | [`docs/postman/`](docs/postman/) | Postman collection for all API endpoints |
 | [`CONTRIBUTORS.md`](CONTRIBUTORS.md) | Team members and their roles |
 
