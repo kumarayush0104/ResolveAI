@@ -99,7 +99,22 @@ class StatusReport:
         return f"Checked PayPal: {', '.join(parts) or 'no source reachable'} -> {verdict}"
 
 
+def awaiting_capture(snap: Optional[ProviderSnapshot]) -> bool:
+    """Buyer approved the order but PayPal holds no capture for it: no money has moved.
+
+    Orders API reports APPROVED, which normalises to PENDING, but that PENDING is *ours to act on*
+    (send the capture), not a payment waiting on PayPal or a bank.
+    """
+    return bool(snap and (snap.order_status or "").upper() == "APPROVED" and not snap.capture_id)
+
+
 def _src_from_snapshot(source: str, snap: ProviderSnapshot, resource_id: Optional[str]) -> SourceResult:
+    if awaiting_capture(snap):
+        return SourceResult(
+            source=source, ok=True, normalized=snap.capture_status, raw_status=snap.order_status,
+            detail="Approved by the buyer but not captured: no money has moved. The capture must be (re)sent.",
+            resource_id=resource_id,
+        )
     return SourceResult(
         source=source,
         ok=True,
