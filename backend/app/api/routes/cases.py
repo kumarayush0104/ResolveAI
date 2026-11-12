@@ -1,3 +1,4 @@
+import logging
 import uuid
 import json
 import hashlib
@@ -21,9 +22,11 @@ from backend.app.services.reconciliation import reconcile_case
 from backend.app.services.investigation import run_case_investigation
 from backend.app.agent.prompts import wrap_untrusted_text
 from backend.app.agent.investigator import stream_investigation
+from backend.app.agent.offline import offline_investigate
 from backend.app.agent.schemas import AgentInvestigationResult
 from backend.app.services.stream_bus import event_bus
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/cases", tags=["cases"])
 
 
@@ -261,19 +264,26 @@ async def trigger_investigation(
 
     async def generate_sse():
         final_result_data = None
-        async for event in stream_investigation(
-            order_id=order.paypal_order_id,
-            case_id=case.id,
-            snapshot=snapshot,
-            attempts=attempts,
-            events=case.events,
-            messages=messages,
-            session=session,
-            status_report=status_report.to_dict(),
-        ):
-            if event.get("type") == "final":
-                final_result_data = event.get("result")
-            yield f"data: {json.dumps(event)}\n\n"
+        try:
+          async for event in stream_investigation(
+              order_id=order.paypal_order_id,
+              case_id=case.id,
+              snapshot=snapshot,
+              attempts=attempts,
+              events=case.events,
+              messages=messages,
+              session=session,
+              status_report=status_report.to_dict(),
+          ):
+              if event.get("type") == "final":
+                  final_result_data = event.get("result")
+              yield f"data: {json.dumps(event)}\n\n"
+        except Exception as exc:  # never leave the browser with an empty stream
+            logger.exception("Investigation stream failed")
+            fb = offline_investigate(snapshot, attempts, case.events)
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+            final_result_data = fb.model_dump()
+            yield f"data: {json.dumps({'type': 'final', 'result': final_result_data, 'offline': True})}\n\n"
 
         # On completion, persist AgentRun and update case status via policy engine
         if final_result_data:
@@ -334,9 +344,8 @@ async def trigger_investigation(
                     "ai_overridden": ai_overridden,
                     "summary": agent_run.summary,
                 })
-            except Exception as e:
-                # Log error and continue
-                pass
+            except Exception:
+                logger.exception("Could not persist investigation result")
 
     return StreamingResponse(
         generate_sse(),
