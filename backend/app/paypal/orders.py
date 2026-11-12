@@ -1,8 +1,11 @@
 import json
+import logging
 from typing import Optional, Dict, Any
 
 from backend.app.paypal.client import paypal_client, ProviderSnapshot, PayPalTimeout, PayPalError
 from backend.app.services.redaction import redact_dict
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_status(paypal_status: Optional[str]) -> str:
@@ -159,6 +162,8 @@ async def capture_order(
         )
     except PayPalError as exc:
         kind = classify_capture_error(exc)
+        issue_txt = ", ".join(exc.issues) or "no issue code"
+        logger.warning("PayPal capture of %s failed: HTTP %s (%s) -> %s", order_id, exc.status_code, issue_txt, kind)
         raw_err = json.dumps(redact_dict({"error": exc.message, "status_code": exc.status_code, "issues": exc.issues}))
 
         if kind == "ALREADY_CAPTURED":
@@ -187,7 +192,7 @@ async def capture_order(
                 source="api",
                 raw_ref=raw_err,
                 raw_capture_status="DECLINED",
-                note="PayPal explicitly declined the payment.",
+                note=f"PayPal explicitly declined the payment ({issue_txt}).",
             )
 
         return ProviderSnapshot(
@@ -197,7 +202,7 @@ async def capture_order(
             order_id=order_id,
             source="api",
             raw_ref=raw_err,
-            note="Unrecognised PayPal error; outcome not established, failing closed.",
+            note=f"PayPal rejected the capture: HTTP {exc.status_code} ({issue_txt}). Outcome not established, failing closed.",
         )
 
     return _snapshot_from_order_json(data, order_id)
