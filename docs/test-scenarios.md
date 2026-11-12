@@ -1,6 +1,6 @@
 # ResolveAI — Test Scenarios
 
-## Automated Tests (31 passed, 1 skipped)
+## Automated Tests
 
 ### Unit Tests — Policy Rules (`test_policy.py`)
 All 9 rules table-driven:
@@ -50,20 +50,32 @@ All §13.1 assertions from the build plan:
 
 ### Scenario 1 — Lost Success Response
 1. Start checkout, create order
-2. Open Fault Lab → **Scenario 1: Lost Success Response**
-3. Observe: state → UNKNOWN, SIMULATION banner appears
-4. Watch reconciler (or trigger lab) deliver COMPLETED
-5. Observe: live SSE update, state → COMPLETED, confetti fires
+2. Open Fault Lab → **Lost payment response**
+3. Observe: state → UNKNOWN and a SIMULATION marker appears
+4. The local simulated status check resolves it as COMPLETED
+5. Observe: live update, state → COMPLETED, confetti fires. No PayPal capture is made.
 
 ### Scenario 2 — Definitive Failure + Safe Retry
 1. Start checkout, create order
-2. Lab → **Scenario 2: Definitive Failure**
+2. Lab → **Payment declined; safe retry**
 3. Observe: state → DENIED, SIMULATION badge
-4. Click "Retry" → Policy Gate shakes with `R04_DENIED_ALLOWS_RETRY` modal
-5. Admin approves → state → RETRY_ALLOWED → PENDING
+4. The policy shows that a retry requires merchant approval (`R04_DENIED_ALLOWS_RETRY`)
+5. No real retry or payment is started by the simulation
 
-### Scenario 3 — Delayed Reconciliation
+### Scenario 3 — Delayed Payment Update
 1. Start checkout, create order
-2. Lab → **Scenario 3: Delayed Reconciliation**
-3. Observe: PENDING state, SSE connected
-4. After 5s: COMPLETED webhook delivered → live toast appears → state updates without refresh
+2. Lab → **Delayed payment update**
+3. Observe: PENDING state
+4. After 5s: simulated COMPLETED update arrives → live toast appears → state updates without refresh
+
+### Single fault injections
+- **Drop success response:** Marks a local simulated attempt UNKNOWN, then resolves it using simulated evidence.
+- **Simulate payment failure:** Sets DENIED; policy allows retry only with merchant approval.
+- **Simulate pending payment:** Sets PENDING and allows reconciliation only.
+- **Send delayed update:** Shows PENDING, then emits a simulated completion.
+- **Duplicate webhook:** Processes the first event once and ignores its duplicate.
+- **Out-of-order update:** Records a newer completion followed by an older pending event; state stays COMPLETED.
+- **Prompt injection:** Tests a simulated unsafe refund request; policy rule R08 blocks it.
+- **Concurrent retry:** Simulates one active retry and blocks the second with a 409 conflict.
+
+All Fault Lab actions are local simulations. They do not call PayPal or move money.

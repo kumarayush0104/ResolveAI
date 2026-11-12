@@ -9,31 +9,31 @@ import { useToast } from '../components/Toast'
 const DEMO_SCENARIOS = [
   {
     id: 'run-scenario-1',
-    label: 'Lost success response',
-    desc: 'Capture completes but the response is dropped → reconciler recovers via GET, case resolves as Completed.',
+    label: 'Lost payment response',
+    desc: 'Simulates a missing payment result, then resolves it with a simulated status check. No PayPal capture is started.',
   },
   {
     id: 'run-scenario-2',
-    label: 'Definitive failure + safe retry',
-    desc: 'Denied snapshot injected → AI diagnoses → policy rule R04 gates the retry correctly.',
+    label: 'Payment declined; safe retry',
+    desc: 'Shows a declined payment. Policy allows a retry only after merchant approval.',
   },
   {
     id: 'run-scenario-3',
-    label: 'Delayed reconciliation',
-    desc: 'Case stays Pending → delayed Completed webhook arrives → state updates live over SSE.',
+    label: 'Delayed payment update',
+    desc: 'Shows Pending first, then sends a simulated Completed update after five seconds.',
   },
 ]
 
 // Individual fault injections
 const LAB_ACTIONS: { id: string; label: string; desc: string; danger: boolean }[] = [
-  { id: 'lose-success-response', label: 'Drop success response',    desc: 'Real capture → Unknown; reconciler recovers via GET',          danger: false },
-  { id: 'inject-failure',        label: 'Inject definitive failure', desc: 'Simulated Denied snapshot; policy blocks any retry',           danger: true  },
-  { id: 'inject-pending',        label: 'Set to Pending',           desc: 'Simulated PAYMENT.CAPTURE.PENDING event',                     danger: false },
-  { id: 'delayed-event',         label: 'Deliver delayed event',    desc: 'Completed arrives after a delay via SSE',                     danger: false },
-  { id: 'duplicate-webhook',     label: 'Duplicate webhook',        desc: 'Same event twice → deduplicated, no double side effects',      danger: false },
-  { id: 'out-of-order',          label: 'Out-of-order event',       desc: 'Older event after a newer one → state does not regress',      danger: false },
-  { id: 'prompt-injection',      label: 'Prompt injection',         desc: '"Ignore previous rules" in a note → policy blocks it',        danger: true  },
-  { id: 'concurrent-retry',      label: 'Concurrent retry',         desc: 'Two simultaneous retries → exactly one wins (409 on second)', danger: false },
+  { id: 'lose-success-response', label: 'Drop success response',    desc: 'Marks the result Unknown, then runs a simulated status check. No payment is made.', danger: false },
+  { id: 'inject-failure',        label: 'Simulate payment failure',  desc: 'Shows a declined payment. A retry needs merchant approval.',                      danger: true  },
+  { id: 'inject-pending',        label: 'Simulate pending payment',  desc: 'Shows a payment waiting for confirmation.',                                       danger: false },
+  { id: 'delayed-event',         label: 'Send delayed update',       desc: 'Shows Pending, then sends a simulated Completed update after a short delay.',       danger: false },
+  { id: 'duplicate-webhook',     label: 'Duplicate webhook',        desc: 'Sends the same event twice; the second copy is ignored.',                          danger: false },
+  { id: 'out-of-order',          label: 'Out-of-order update',       desc: 'Sends an older Pending event after Completed; the case stays Completed.',          danger: false },
+  { id: 'prompt-injection',      label: 'Prompt injection',         desc: 'Tests an unsafe refund instruction; policy blocks it.',                            danger: true  },
+  { id: 'concurrent-retry',      label: 'Concurrent retry',         desc: 'Simulates two retries at once; one proceeds and the other gets a 409 conflict.',     danger: false },
 ]
 
 /** Soft ripple ring on button trigger — professional feedback, no shockwave */
@@ -100,7 +100,7 @@ export function LabDrawer({
           <span className="font-mono text-pp-gold">{orderId.slice(0, 12)}…</span>
         </p>
         <p className="mt-0.5 text-[11.5px] text-white/55">
-          Every action is flagged as a simulation and runs through the real policy engine. No money moves.
+          Every action is a simulation and runs through the real policy rules. It never contacts PayPal or moves money.
         </p>
       </div>
 

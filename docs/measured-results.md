@@ -2,6 +2,8 @@
 
 Recorded: 2026-10-30 · 5 runs each · SQLite · localhost
 
+These are historical measurements from the earlier Fault Lab implementation. The current lab is local-only and these numbers have not been re-measured for it.
+
 ## Scenario 1: Lost Success Response (UNKNOWN → Reconciliation → COMPLETED)
 | Run | Pass/Fail | Latency (ms) |
 |-----|-----------|-------------|

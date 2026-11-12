@@ -38,10 +38,10 @@ Show the landing page.
 
 ## 2:05 — Fault Lab — Simulate Stuck Payment (40s)
 - Open Lab drawer (bottom-right flask icon)
-- Click "Scenario 1: Lost Success Response"
+- Click "Lost payment response"
 - Show SIMULATION banner appear on affected events
-- Watch state → UNKNOWN → then SSE delivers COMPLETED → confetti fires
-- Point out the SIMULATION badges on simulated events vs LIVE SANDBOX on real
+- Watch state → UNKNOWN → then the simulated status check delivers COMPLETED → confetti fires
+- Point out that the lab is local-only: it does not call PayPal or move money
 
 ## 2:45 — Merchant Console (15s)
 - Switch role to Merchant Console

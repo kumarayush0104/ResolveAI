@@ -211,7 +211,7 @@ Sandbox cannot reliably produce stuck/pending/conflicting states, so provide con
 
 | Lab action | Behavior | Label |
 |---|---|---|
-| **Lose success response** | Do a real sandbox capture, then make the app *behave as if* the response was lost (attempt marked `UNKNOWN`, timeout recorded). Reconciliation then GETs the real capture → COMPLETED. | Real data + simulated timeout |
+| **Lose success response** | Mark a local simulated attempt `UNKNOWN`, then resolve it with simulated completion evidence. No PayPal request or payment is made. | Local simulation through the policy engine |
 | **Inject definitive failure** | Create a simulated `DENIED` provider snapshot tied to a labeled test order. | `SIMULATION` |
 | **Inject pending** | Create a simulated `PAYMENT.CAPTURE.PENDING` event. | `SIMULATION` |
 | **Deliver delayed event** | After N seconds, deliver `PAYMENT.CAPTURE.COMPLETED`; UI updates live via SSE and toast. | `SIMULATION` |
