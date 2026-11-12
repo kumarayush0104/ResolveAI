@@ -488,6 +488,15 @@
   /* Ensure the page background matches canvas color */
   .story-page { background: #F3F7FB; }
 
+  .story-phone-frame {
+    width: 100vw !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
   /* TabBar safe area on notched phones */
   .tab-bar-native {
     padding-bottom: env(safe-area-inset-bottom, 0px);

@@ -21,7 +21,7 @@ export function Sheet({
   return (
     <Overlay>
       <motion.div
-        className="pointer-events-auto absolute inset-0 bg-navy-deep/50"
+        className="pointer-events-auto absolute inset-0 z-10 bg-navy-deep/50"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -30,7 +30,7 @@ export function Sheet({
       <motion.div
         role="dialog"
         aria-modal="true"
-        className={`pointer-events-auto absolute inset-x-0 bottom-0 flex flex-col overflow-hidden rounded-t-[28px] shadow-2xl ${
+        className={`pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex flex-col overflow-hidden rounded-t-[28px] shadow-2xl ${
           tall ? 'h-[86%]' : 'max-h-[86%]'
         } ${dark ? 'bg-navy-deep text-white' : 'bg-white text-ink'}`}
         initial={{ y: '100%' }}
@@ -43,8 +43,8 @@ export function Sheet({
           <button
             onClick={onClose}
             aria-label="Close"
-            className={`flex h-9 w-9 items-center justify-center rounded-full ${
-              dark ? 'bg-white/10 text-white' : 'bg-canvas text-muted'
+            className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors ${
+              dark ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-canvas text-muted hover:text-navy'
             }`}
           >
             <X size={18} />
