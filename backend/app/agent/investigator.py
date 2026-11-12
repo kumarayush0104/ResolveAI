@@ -96,6 +96,7 @@ async def stream_investigation(
     events: List[Any],
     messages: Optional[List[str]],
     session: AsyncSession,
+    status_report: Optional[dict] = None,
 ) -> AsyncIterator[dict]:
     """
     Stream SSE events for the investigation:
@@ -118,6 +119,7 @@ async def stream_investigation(
         evidence_bundle = {
             "order_id": order_id,
             "snapshot": snapshot.to_dict() if snapshot else {},
+            "status_report": status_report or {},
             "attempts": [
                 {
                     "id": getattr(a, "id", ""),
