@@ -1,6 +1,6 @@
 <div align="center">
 
-![ResolveAI Banner](docs/assets/banner.jpeg)
+<img src="docs/assets/banner.jpeg" alt="ResolveAI Banner" width="480" style="max-width: 100%; height: auto; border-radius: 12px;" />
 
 # ResolveAI
 
