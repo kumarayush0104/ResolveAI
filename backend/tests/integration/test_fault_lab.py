@@ -61,7 +61,8 @@ async def test_lost_response_is_local_and_simulated_reconciliation_completes(
 ):
     order, case = await create_case(db_session)
     monkeypatch.setattr(lab_service, "AsyncSessionLocal", make_session_factory(db_session))
-    monkeypatch.setattr(lab_service, "_schedule_simulated_reconcile", lambda case_id: None)
+    original_schedule = lab_service._schedule_simulated_reconcile
+    monkeypatch.setattr(lab_service, "_schedule_simulated_reconcile", lambda case_id, delay=3.0: None)
 
     response = await async_client.post(
         "/api/lab/lose-success-response",
@@ -86,7 +87,7 @@ async def test_lost_response_is_local_and_simulated_reconciliation_completes(
     monkeypatch.setattr(reconciliation, "reconcile_case", fail_if_reconciled)
     await reconciliation.run_reconciliation_cycle()
 
-    lab_service._schedule_simulated_reconcile(case.id, delay=0)
+    original_schedule(case.id, delay=0)
     await asyncio.sleep(0.05)
     await db_session.refresh(case)
     await db_session.refresh(attempt)
@@ -205,7 +206,8 @@ async def test_delayed_event_starts_pending_then_delivers_completion(
 
 @pytest.mark.asyncio
 async def test_all_end_to_end_scenarios_are_simulated(async_client, auth_tokens, db_session, monkeypatch):
-    monkeypatch.setattr(lab_service, "_schedule_simulated_reconcile", lambda case_id: None)
+    original_schedule = lab_service._schedule_simulated_reconcile
+    monkeypatch.setattr(lab_service, "_schedule_simulated_reconcile", lambda case_id, delay=3.0: None)
 
     _, first_case = await create_case(db_session)
     response = await async_client.post(
